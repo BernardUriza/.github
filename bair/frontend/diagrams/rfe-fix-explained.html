@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>RFE draft fix — before vs after</title>
+<style>
+  body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 32px; }
+  h1 { color: #8b949e; font-weight: 600; font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: #6e7681; margin: 0 0 24px; font-size: 14px; }
+  .card { background: #161b22; border: 1px solid #21262d; border-radius: 10px; padding: 24px; max-width: 1000px; margin: 0 auto; }
+  .legend { max-width: 1000px; margin: 16px auto 0; color: #8b949e; font-size: 13px; line-height: 1.6; }
+  .legend b { color: #e6edf3; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>RFE draft fix — before vs after</h1>
+    <p class="sub">Why RFE drafts shipped raw placeholders, and what PR #1422 changed.</p>
+    <pre class="mermaid">
+flowchart TD
+    A["Emily launches an RFE draft<br/>(app.visalaw.ai)"] --> B{"Which generation path<br/>does the draft take?"}
+
+    B -->|"BEFORE: RFE silently fell<br/>to the legacy path"| C["Legacy Browserless flow"]
+    B -->|"AFTER PR #1422: RFE routed<br/>by projectTypeId 190"| D["In-process v2 flow"]
+
+    C --> E["Renders the draft-app URL<br/>through a headless browser"]
+    E --> F["Section context is NOT merged<br/>into the prompt"]
+    F --> G["Draft ships raw placeholders<br/>like {{section_2_info}}"]
+
+    D --> H["buildPromptData merges the<br/>RFE supporting-document context"]
+    H --> I["Each section gets its real<br/>extracted content"]
+    I --> J["Clean draft - no placeholders,<br/>full RFE context"]
+
+    style C fill:#5a2a2a,stroke:#8a3a3a,color:#f5d0d0
+    style E fill:#5a2a2a,stroke:#8a3a3a,color:#f5d0d0
+    style F fill:#5a2a2a,stroke:#8a3a3a,color:#f5d0d0
+    style G fill:#5a2a2a,stroke:#8a3a3a,color:#f5d0d0
+    style D fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+    style H fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+    style I fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+    style J fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+    style B fill:#1f3a5a,stroke:#3a6aa0,color:#c8def0
+    </pre>
+  </div>
+  <p class="legend">
+    <b>Red path</b> = the old behavior. RFE drafts were treated as a legacy project type and went through the headless-browser render, which never merged your uploaded supporting-document context into the prompt — so the model saw empty <code>{{section_N_info}}</code> placeholders and passed them straight through.<br/>
+    <b>Green path</b> = after PR #1422. RFE drafts (projectTypeId 190) are now routed to the in-process generator, which merges the real extracted context for each section before the model runs.
+  </p>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+  </script>
+</body>
+</html>

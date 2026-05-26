@@ -1,0 +1,192 @@
+{
+  "generated_at": "2026-05-01T01:17:07Z",
+  "workspace": "visalaw-ai",
+  "project_identifier": "VISAL",
+  "total_open": 295,
+  "by_group": {
+    "backlog": 268,
+    "unstarted": 27
+  },
+  "top": [
+    {
+      "identifier": "VISAL-697",
+      "title": "[backend] Decompose UploadsService (2904 LOC god-service on staging-v2)",
+      "description": "Status: 7 slices shipped, 1 merged + 6 draft PRs stacked. UploadsService reduced from 2904 LOC to 1487 LOC (-49%) with all behavior preserved.\nDecomposition map:\nSlice\nPR\nExtracted\nLOC after\n1\n#1281 (merged)\nUploadsPuppeteerService (HTML to PDF retri…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-697-backend-decompose-uploadsservice-2904-loc-god-serv",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-697/",
+      "scope": "back"
+    },
+    {
+      "identifier": "VISAL-695",
+      "title": "Backend application startup bug",
+      "description": "The issue is happening after the latest pull in stagingv2 branch. Application not running throwing error probably type error.",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-695-backend-application-startup-bug",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-695/",
+      "scope": "back"
+    },
+    {
+      "identifier": "VISAL-694",
+      "title": "Mobile Post-Message Actions UI",
+      "description": "Post Message actions = \"View Sources\", download, copy, thumbs up, thumbs down, refresh\nOn mobile, the \"view sources\" gets cut off.  \nWhen the screen is less than 450px wide, we should stack the \"View sources\" button and the rest of the buttons. \nWhil…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-694-mobile-post-message-actions-ui",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-694/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-693",
+      "title": "Mobile UI",
+      "description": "This is the parent ticket for all of the mobile issues. I'm going to try to keep them separated for the most part so we can more easily make sure we're not stepping on anyone else's toes.",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-693-mobile-ui",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-693/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-692",
+      "title": "Drafts - RFE - do not include RFE in exhibit list toggle off",
+      "description": "In the exhibit list interface, either do not have the RFE document itself appear in the exhibit list or have it appear but with the include in exhibit list toggled off. Either option is fine, although the second one is preferred.",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-692-drafts-rfe-do-not-include-rfe-in-exhibit-list-togg",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-692/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-691",
+      "title": "Simplify upload status polling: move completion logic to backend",
+      "description": "The current upload status system is fragile because the frontend owns too much logic that the backend should own.\nCurrent problems\nFrontend tracks individual document IDs, polls them one by one, and tries to determine \"are all N done?\" — this is wher…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-691-simplify-upload-status-polling-move-completion-log",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-691/",
+      "scope": "back"
+    },
+    {
+      "identifier": "VISAL-690",
+      "title": "UI: Documents - Projects Column",
+      "description": "https://www.figma.com/design/5usjhVivug7p9DIP8o8uC3/2.0-New-Figma?node-id=1719-14675&t=MG7333Xkkq1pf5sN-1\nCurrently, under the \"Project\" tab of the documents page, if there is more than 1 project associated with a document, it will say the name of on…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-690-ui-documents-projects-column",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-690/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-689",
+      "title": "Drafts - RFE - section tag display after ai tagging",
+      "description": "It is expected that 1) all section tags are automatically applied to documents and 2) when AI tags documents, the tags should show the section name, not the section number placeholder.\nCurrently, documents are only automatically tagged with introduct…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-689-drafts-rfe-section-tag-display-after-ai-tagging",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-689/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-687",
+      "title": "[drafts] Footer upload-progress toast persists after underlying upload deleted/failed; survives hard refresh",
+      "description": "Symptom\nElizabeth Kirberger (kirbergerpc@gmail.com, org 71e71b4b-05e0-4b03-bea9-6a886bb7df8b) reports the Drafts footer shows a permanent \"Uploading 1 file - IMF EB-1A Template Finance Economics et al - 53%\" notification that will not clear, regardle…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-687-drafts-footer-upload-progress-toast-persists-after",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-687/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-686",
+      "title": "Replace Apryse with reliable doc viewer/editor post-2.0",
+      "description": "Problem\nWhen editing a draft in staging-v2, stray labels — \"Header – Section 1\", \"Footer – Section 1\", \"Options\" — appear in the grey area around the page. These are Apryse (WebViewer) editor chrome leaking into the view, not content from the draft b…",
+      "state": "Todo",
+      "branch": "bernarduriza/visal-686-replace-apryse-with-reliable-doc-viewer-editor-pos",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-686/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-685",
+      "title": "bug: UI - stop checking the bulk-status endpoint for drafts that are already done",
+      "description": "All of these drafts are in a finalized state. The state won't change while we are sitting on the page. When all drafts are in a final state - Failed or Draft Complete - then do not continue to call the draft status API at /api/v1/drafts/bulk-status",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-685-bug-ui-stop-checking-the-bulk-status-endpoint-for",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-685/",
+      "scope": "both"
+    },
+    {
+      "identifier": "VISAL-684",
+      "title": "Bug: can't scroll to the bottom item in the drafts list page",
+      "description": "Create a bunch of drafts. Go to one of them and try to upload files. While they are uploading, click the 'continue later' button to get back to the list. Scroll to the bottom.",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-684-bug-can-t-scroll-to-the-bottom-item-in-the-drafts",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-684/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-682",
+      "title": "Draft document upload - Cancel does not cancel",
+      "description": "",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-682-draft-document-upload-cancel-does-not-cancel",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-682/",
+      "scope": "other"
+    },
+    {
+      "identifier": "VISAL-680",
+      "title": "Draft Share mechanics do not display correctly",
+      "description": "STR\nIn an org with multiple users and at least 2 drafts\nNavigate to drafts list \nPick one draft and select the \"share\" icon, then select the user(s) with whom to share the draft. Complete the Share action.\nClick the \"share\" icon of another draft\nObse…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-680-draft-share-mechanics-do-not-display-correctly",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-680/",
+      "scope": "other"
+    },
+    {
+      "identifier": "VISAL-679",
+      "title": "Drafts - inline citations - page numbers",
+      "description": "One of the options we offer for inline citation style is \"Exhibit with Page Number\"\nFirst note- let's switch the order in the option and output so that the exhibit is listed first - like see Exhibit 2 at page 10.\nMore importantly - the page numbers a…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-679-drafts-inline-citations-page-numbers",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-679/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-678",
+      "title": "Drafts - bundled exhibit packet - intro text",
+      "description": "Please remove the default text from the introduction text box.",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-678-drafts-bundled-exhibit-packet-intro-text",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-678/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-677",
+      "title": "Drafts - reference letters - page breaks not displayed properly",
+      "description": "",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-677-drafts-reference-letters-page-breaks-not-displayed",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-677/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-675",
+      "title": "Drafts - petition process type (33) - formatting inaccuracy",
+      "description": "Process type 33 and ultimately other petition process types have a unique formatting style, including double spacing and number list. In core version of Drafts, the formatting is skewed with some numbered blank lines included. See attached. draftId=6…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-675-drafts-petition-process-type-33-formatting-inaccur",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-675/",
+      "scope": "front"
+    },
+    {
+      "identifier": "VISAL-7",
+      "title": "6. Customize your settings ⚙️",
+      "description": "Now that you're getting familiar with Plane, let's explore how you can customize settings to make it work just right for you and your team!\nWorkspace settings\nRemember those workspace settings we mentioned when inviting team members? There's a lot mo…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-7-6-customize-your-settings",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-7/",
+      "scope": "other"
+    },
+    {
+      "identifier": "VISAL-6",
+      "title": "5. Use Cycles to time box tasks 🗓️",
+      "description": "A Cycle in Plane is like a sprint - a dedicated timeframe where your team focuses on completing specific work items. It helps you break down your project into manageable chunks with clear start and end dates so everyone knows what to work on and when…",
+      "state": "Backlog",
+      "branch": "bernarduriza/visal-6-5-use-cycles-to-time-box-tasks",
+      "url": "https://app.plane.so/visalaw-ai/browse/VISAL-6/",
+      "scope": "other"
+    }
+  ]
+}

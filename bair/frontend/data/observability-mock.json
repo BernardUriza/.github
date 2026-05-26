@@ -1,0 +1,60 @@
+{
+  "_mockup": true,
+  "_note": "Illustrative data only. Real version is written by a posthog-snapshot workflow (server-side HogQL query, key in secrets) — same pattern as data/issues.json from plane-snapshot.",
+  "generated_at": "2026-05-20T12:00:00Z",
+  "migration": {
+    "summary": { "migrated": 31, "transition": 9, "v1_only": 6, "inactive": 3, "total_active": 49 },
+    "orgs": [
+      { "org": "Northwind Immigration LLP", "last_v1": "2026-03-02", "last_v2": "2026-05-20", "drafts_version": "2.1", "status": "migrated" },
+      { "org": "Globex Visa Group", "last_v1": "2026-02-18", "last_v2": "2026-05-19", "drafts_version": "2.1", "status": "migrated" },
+      { "org": "Initech Legal PA", "last_v1": "2026-05-18", "last_v2": "2026-05-20", "drafts_version": "2.0 → 2.1", "status": "transition" },
+      { "org": "Soylent Immigration Partners", "last_v1": "2026-05-17", "last_v2": "2026-05-16", "drafts_version": "2.0", "status": "transition" },
+      { "org": "Hooli Immigration Desk", "last_v1": "2026-05-20", "last_v2": "", "drafts_version": "1.0", "status": "v1_only" },
+      { "org": "Stark & Vargas Immigration", "last_v1": "2026-05-19", "last_v2": "", "drafts_version": "1.0", "status": "v1_only" },
+      { "org": "Wayne Visa Advisors", "last_v1": "2026-01-09", "last_v2": "", "drafts_version": "", "status": "inactive" }
+    ]
+  },
+  "paths": {
+    "title": "Demo flow — Research to Skills",
+    "steps": [
+      { "name": "Research", "users": 412, "dropoff_pct": 0 },
+      { "name": "Law Library", "users": 388, "dropoff_pct": 6 },
+      { "name": "Legal Research / Citations", "users": 341, "dropoff_pct": 12 },
+      { "name": "Drafting", "users": 268, "dropoff_pct": 21 },
+      { "name": "Private GPT", "users": 203, "dropoff_pct": 24 },
+      { "name": "Skills", "users": 147, "dropoff_pct": 28 }
+    ]
+  },
+  "funnel": {
+    "title": "Activation funnel",
+    "steps": [
+      { "name": "Signed in", "users": 412, "conversion_pct": 100 },
+      { "name": "Opened a draft", "users": 297, "conversion_pct": 72 },
+      { "name": "Generated a section", "users": 211, "conversion_pct": 51 },
+      { "name": "Completed a draft", "users": 138, "conversion_pct": 33 }
+    ]
+  },
+  "retention": {
+    "title": "Weekly retention by signup cohort",
+    "periods": ["W0", "W1", "W2", "W3", "W4"],
+    "cohorts": [
+      { "label": "Apr 21", "size": 84, "values": [100, 62, 48, 41, 38] },
+      { "label": "Apr 28", "size": 91, "values": [100, 67, 53, 45, null] },
+      { "label": "May 05", "size": 78, "values": [100, 71, 58, null, null] },
+      { "label": "May 12", "size": 103, "values": [100, 74, null, null, null] },
+      { "label": "May 19", "size": 96, "values": [100, null, null, null, null] }
+    ]
+  },
+  "stickiness": {
+    "dau": 142,
+    "wau": 318,
+    "mau": 487,
+    "dau_wau_pct": 45,
+    "wau_mau_pct": 65
+  },
+  "session_replays": [
+    { "org": "Initech Legal PA", "duration": "8m 12s", "flagged": "drop-off at Drafting", "url": "#" },
+    { "org": "Soylent Immigration Partners", "duration": "4m 47s", "flagged": "rage click on citation toggle", "url": "#" },
+    { "org": "Hooli Immigration Desk", "duration": "11m 03s", "flagged": "V1-only, never reached V2", "url": "#" }
+  ]
+}

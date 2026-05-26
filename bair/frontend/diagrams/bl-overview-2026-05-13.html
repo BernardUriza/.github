@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Plane BL — Overview</title>
+<style>
+  body { background:#0d1117; color:#e6edf3; font-family:-apple-system,Segoe UI,sans-serif; margin:0; padding:24px; }
+  h1 { color:#8b949e; font-weight:500; font-size:18px; margin:0 0 8px; }
+  .meta { color:#6e7681; font-size:12px; margin-bottom:24px; }
+  .card { background:#161b22; border-radius:8px; padding:24px; }
+  pre.mermaid { background:transparent; }
+</style></head>
+<body>
+<h1>Plane Backlog — Composition</h1>
+<div class="meta">Snapshot 2026-05-13 · 807 tickets · verified via Plane API paginated dump</div>
+<div class="card">
+<pre class="mermaid">
+flowchart TD
+    BL[Plane BL<br/>807 tickets total]
+
+    BL --> U[Unassigned<br/>726 / 90%]
+    BL --> A[Assigned<br/>81 / 10%]
+
+    U --> UL[Linear migration import<br/>updated 2026-04-28: 657<br/>~81% of BL]
+    U --> UR[Recent unassigned bugs<br/>updated >= 2026-05-01: ~70]
+
+    UL --> R313[Roadmap stories<br/>created 2026-03-13: 55<br/>label: Linear Imported + Feature<br/>source: Core 2.0 Feature Spreadsheet]
+    UL --> ROther[Other imported tickets<br/>~600]
+
+    R313 --> RShipped[Self-admit shipped<br/>VISAL-428, VISAL-538]
+    R313 --> RDelivered[Visually delivered<br/>VISAL-415, VISAL-632, etc.]
+    R313 --> RPending[Genuine roadmap pending<br/>VISAL-441 SSO, VISAL-453 Activity Feed, etc.]
+
+    A --> AMine[Bernard: 2<br/>VISAL-710 + VISAL-782<br/>already closed today]
+    A --> AOther[Others: 79<br/>Katie, Ram, Rohan, Axel, etc.]
+
+    style BL fill:#1f3a5a,stroke:#3a6aa0,color:#c8def0
+    style RShipped fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+    style RDelivered fill:#5a4a1a,stroke:#8a7a3a,color:#f5e8b0
+    style RPending fill:#5a3a1a,stroke:#8a6a3a,color:#f0d8b0
+    style AMine fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+    style UR fill:#5a2a2a,stroke:#8a3a3a,color:#f5d0d0
+</pre>
+</div>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+</script>
+</body></html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VAIR — Visalaw AI Reviewer</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+
+  <!-- Open Graph (WhatsApp, Slack, iMessage, LinkedIn) -->
+  <meta property="og:title" content="VAIR — Visalaw AI Reviewer">
+  <meta property="og:description" content="Autonomous code review, changelog generation, and issue resolution for the Visalaw engineering team. Powered by GPT-5.4 + Claude.">
+  <meta property="og:image" content="https://i.imgur.com/ECs1Ss7.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://visalaw.github.io/.github/">
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="VAIR — Visalaw AI Reviewer">
+  <meta name="twitter:description" content="Autonomous code review, changelog generation, and issue resolution. GPT-5.4 + Claude.">
+  <meta name="twitter:image" content="https://i.imgur.com/ECs1Ss7.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=1.0.84">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/css/splide-core.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/js/splide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/brython@3.13.0/brython.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/brython@3.13.0/brython_stdlib.js"></script>
+</head>
+<body onload="brython({debug: 0})">
+
+  <!-- ═══ LANDING PAGE ═══ -->
+  <div class="landing" id="landing">
+    <div class="mesh-bg"></div>
+    <div class="grain"></div>
+    <canvas id="particles"></canvas>
+
+    <img class="landing-logo" src="img/vair-logo.png" alt="VAIR" draggable="false">
+
+    <div class="landing-content">
+      <p class="landing-subtitle">Visalaw <em>Artificial Intelligence</em> <span class="vair-r-slot" data-r-cycle>Reviewer</span></p>
+      <div class="landing-actions">
+        <button class="enter-btn" id="open-login-btn">
+          Enter Dashboard
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <a class="enter-btn enter-btn-alt" href="observability.html">
+          Migration Monitor (mock)
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="version-tag" id="version-tag">internal tool &middot; visalaw.ai</div>
+  </div>
+
+  <!-- ═══ LOGIN MODAL ═══ -->
+  <div class="modal-overlay" id="login-overlay">
+    <div class="login-modal">
+      <button class="modal-close" id="modal-close-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6L6 18"/><path d="M6 6l12 12"/>
+        </svg>
+      </button>
+      <h2>Authenticate</h2>
+      <p class="modal-desc">Connect to GitHub to get started.</p>
+      <label for="token-input">GitHub Token</label>
+      <input type="password" id="token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+             spellcheck="false" autocomplete="off">
+      <div class="login-error" id="login-error"></div>
+      <button class="login-btn" id="login-btn">Sign in</button>
+      <div class="hint">
+        <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=VAIR+Dashboard" target="_blank">GitHub token</a>
+        with <code>repo</code> + <code>workflow</code> scopes.<br>
+        Stored in <code>localStorage</code> &mdash; persists across browser restarts.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ APP SHELL — Bento Grid ═══ -->
+  <div class="app" id="app">
+    <div class="topbar">
+      <div class="logo"><span>VAIR</span> Dashboard <div class="logo-dot"></div></div>
+      <div class="topbar-search">
+        <span class="search-icon">/</span>
+        <input id="global-search" type="search" placeholder="Search issues, PRs, branches..." spellcheck="false" autocomplete="off">
+      </div>
+      <div class="user">
+        <img id="user-avatar" src="" alt="">
+        <span id="user-name"></span>
+      </div>
+      <button class="logout" id="logout-btn">Sign out</button>
+    </div>
+    <div class="bento">
+      <div class="g-card control-panel" id="control-panel" style="grid-area:control"></div>
+      <div class="g-card stat-card" id="stat-total" style="grid-area:s1"></div>
+      <div class="g-card stat-card" id="stat-success" style="grid-area:s2"></div>
+      <div class="g-card stat-card" id="stat-time" style="grid-area:s3"></div>
+      <div class="g-card stat-card" id="stat-active" style="grid-area:s4"></div>
+      <div class="g-card runs-panel" id="runs-panel" style="grid-area:runs"></div>
+      <div class="g-card dispatch-panel" id="dispatch-resolve" style="grid-area:resolve"></div>
+      <div class="g-card dispatch-panel" id="dispatch-review" style="grid-area:review"></div>
+      <div class="g-card health-panel" id="health-panel" style="grid-area:health"></div>
+      <div class="g-card runs-panel" id="pulls-panel" style="grid-area:prs"></div>
+    </div>
+
+    <!-- ═══ VAIR Chat (floating, bottom-right) ═══ -->
+    <div id="vair-chat" class="vair-chat-panel"></div>
+  </div>
+
+  <!-- ═══ PARTICLES (vanilla JS) ═══ -->
+  <script src="js/particles.js"></script>
+
+  <!-- LANDING SLOT MACHINE -->
+  <script>
+  (function () {
+    const WORDS = [
+      "Reviewer", "Remedier", "Resolver",
+      "Refactorer", "Researcher", "Releaser", "Reporter", "Reanimator",
+      "Ramificator", "Revolver", "Renegotiator", "Regurgitator",
+      "Roastmaster", "Ravioli", "Reggaetoner", "Rumiator", "Repartidor",
+      "Resucitator", "Reptilianator", "Ranchero", "Rasputin", "Roomba"
+    ];
+    const CHARS = "!<>-_\/[]{}=+*^?#________";
+    class TextScramble {
+      constructor(el) { this.el = el; this.queue = []; this.frame = 0; this.update = this.update.bind(this); }
+      setText(newText) {
+        const oldText = this.el.innerText;
+        const length = Math.max(oldText.length, newText.length);
+        const promise = new Promise(res => this.resolve = res);
+        this.queue = [];
+        for (let i = 0; i < length; i++) {
+          const from = oldText[i] || "";
+          const to = newText[i] || "";
+          const start = Math.floor(Math.random() * 40);
+          const end = start + Math.floor(Math.random() * 40);
+          this.queue.push({ from, to, start, end });
+        }
+        cancelAnimationFrame(this.frameRequest);
+        this.frame = 0;
+        this.update();
+        return promise;
+      }
+      update() {
+        let output = "";
+        let complete = 0;
+        for (let i = 0, n = this.queue.length; i < n; i++) {
+          let { from, to, start, end, char } = this.queue[i];
+          if (this.frame >= end) { complete++; output += to; }
+          else if (this.frame >= start) {
+            if (!char || Math.random() < 0.28) {
+              char = CHARS[Math.floor(Math.random() * CHARS.length)];
+              this.queue[i].char = char;
+            }
+            output += '<span style="opacity:0.55">' + char + '</span>';
+          } else { output += from; }
+        }
+        this.el.innerHTML = output;
+        if (complete === this.queue.length) this.resolve();
+        else { this.frameRequest = requestAnimationFrame(this.update); this.frame++; }
+      }
+    }
+    const el = document.querySelector("[data-r-cycle]");
+    if (!el) return;
+    const fx = new TextScramble(el);
+    let i = 1;
+    function next() {
+      fx.setText(WORDS[i % WORDS.length]).then(() => setTimeout(next, 1800));
+      i++;
+    }
+    setTimeout(next, 1800);
+  })();
+  </script>
+
+
+  <!-- ═══ BRYTHON APP (entry point) ═══ -->
+  <script type="text/python">
+from py.app import *  # noqa: F403 — boots the entire app
+  </script>
+</body>
+</html>

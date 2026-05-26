@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RFE generation — why it failed, how it's fixed</title>
+<style>
+  body { background: #0d1117; color: #e6edf3; font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 32px; }
+  h1 { color: #8b949e; font-weight: 500; font-size: 18px; margin: 0 0 8px 0; }
+  p.sub { color: #8b949e; font-size: 14px; margin: 0 0 24px 0; }
+  .card { background: #161b22; border-radius: 8px; padding: 24px; max-width: 1500px; margin: 0 auto; }
+  .legend { margin-top: 24px; font-size: 13px; color: #8b949e; line-height: 1.7; }
+  .legend strong { color: #e6edf3; }
+  .legend .ndocs { color: #f0d8b0; }
+  .legend .fix { color: #c8f0d0; }
+  .legend .empty { color: #f5d0d0; }
+  .legend .prop { color: #c8def0; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>RFE generation — why it failed, and how it's fixed</h1>
+  <p class="sub">The analysis worked. The failure was a leftover Mongo dependency in the old code. The fix is already merged.</p>
+<pre class="mermaid">
+flowchart TB
+    USER[Attorney uploads RFE case files] --> ANALYSIS[Analysis reads the RFE notice<br/>and extracts each request]
+    ANALYSIS --> RFEREQ[RFE requests saved on the draft<br/>this worked: 6 requests saved]
+
+    subgraph GEN ["Writing the response sections (process type 190)"]
+        direction TB
+        OLD[BEFORE the fix<br/>required section templates seeded in Mongo<br/>for type 190 — they never were<br/>so generation FAILED]
+        NEW[AFTER the fix - already merged<br/>builds the sections in-code<br/>straight from the RFE requests<br/>no Mongo seeding needed]
+    end
+
+    RFEREQ -. old code looked here .-> OLD
+    RFEREQ --> NEW
+
+    NEW --> PROMPT[Prompt sent to the model]
+    NEW --> LLM[Model writes each section]
+    PROMPT --> LLM
+
+    subgraph NDOCS ["NetDocuments — owns the document"]
+        TEMPLATE[.docx template with the<br/>section placeholders]
+    end
+    LLM --> TEMPLATE
+    TEMPLATE --> FINAL[Final RFE response .docx]
+
+    subgraph PROPOSED ["Proposed next: legal context for the RFE"]
+        direction TB
+        SELECT[User picks the underlying process type<br/>in the RFE form - H-1B, EB-1, etc.]
+        SELECT --> INHERIT[Pull THAT type's associated regulations<br/>nothing if no existing type applies]
+    end
+    INHERIT -. adds authority to .-> PROMPT
+
+    classDef ndocs fill:#5a3a1a,stroke:#8a6a3a,color:#f0d8b0;
+    classDef fix fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0;
+    classDef empty fill:#5a2a2a,stroke:#8a3a3a,color:#f5d0d0;
+    classDef prop fill:#1f3a5a,stroke:#3a6aa0,color:#c8def0;
+    classDef neutral fill:#21262d,stroke:#484f58,color:#e6edf3;
+
+    class TEMPLATE,FINAL ndocs;
+    class OLD empty;
+    class NEW fix;
+    class SELECT,INHERIT prop;
+    class USER,ANALYSIS,RFEREQ,LLM,PROMPT neutral;
+</pre>
+  <div class="legend">
+    <p><strong class="empty">Red</strong> = the bug. The old code required RFE "section templates" to be pre-loaded in Mongo for process type 190. They never were, so generation failed with "no section templates configured for projectTypeId 190". Your analysis itself was fine — 6 RFE requests were saved correctly.</p>
+    <p><strong class="fix">Green</strong> = the fix (already merged). It builds the response sections in-code directly from the RFE requests, dropping the Mongo dependency entirely. Once it deploys, RFE generation works with no seeding and nothing needed from you.</p>
+    <p><strong class="ndocs">Orange</strong> = NetDocuments. Still owns the .docx shape and placeholders. Unchanged.</p>
+    <p><strong class="prop">Blue</strong> = the proposed follow-up for legal context. Since an RFE can be for any process type, the form lets the user pick the underlying type and we pull that type's existing associated regulations (created in the admin dashboard). If no existing type applies, there's simply no extra legal context — which matches what you described.</p>
+  </div>
+</div>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+</script>
+</body>
+</html>

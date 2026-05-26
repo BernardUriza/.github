@@ -1,0 +1,23 @@
+[project]
+name = "bair"
+version = "0.0.0"
+description = "Bernard's AI Reviewer — thin consumer of xair wired against bernarduriza repos."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Bernard Uriza Orozco" }]
+license = { text = "MIT" }
+
+dependencies = [
+    "xair @ git+https://github.com/BernardUriza/xair@main",
+]
+
+[project.scripts]
+bair = "bair.__main__:main"
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["bair*"]

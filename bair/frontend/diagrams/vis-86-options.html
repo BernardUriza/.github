@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Three paths to ship VIS-86</title>
+<style>
+  body{font-family:system-ui;margin:24px;background:#0d1117;color:#e6edf3}
+  h1{font-size:14px;color:#8b949e;margin:0 0 16px;font-weight:500}
+  .mermaid{background:#161b22;padding:24px;border-radius:8px;border:1px solid #30363d;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+</style>
+</head><body>
+<h1>Three paths to ship VIS-86</h1>
+<pre class="mermaid">
+flowchart TD
+    Q{"How do we ship VIS-86?"}
+
+    Q -->|"if we accept the constraint and group by what's already there..."| A["<b>Option A — Use what we already have</b><br/>Group results into Immigration / Ethics / Caselaw.<br/>The Caselaw section will simply stay empty."]
+    Q -->|"if we are willing to reorganize the data..."| B["<b>Option B — Reshuffle Immigration</b><br/>Pull statutes and regulations out into their own section.<br/>Drop the Caselaw section entirely."]
+    Q -->|"if we expand the scope to match the spec literally..."| C["<b>Option C — Bring caselaw to the library</b><br/>Have the Library page also call CourtListener live,<br/>just like Chat does today."]
+
+    A -->|"so we get..."| A_PRO["A working bucketed UI in days,<br/>frontend only, no migrations"]
+    A -->|"but we ship with..."| A_CON["An empty Caselaw section forever,<br/>which looks like a bug to anyone who didn't read this ticket"]
+
+    B -->|"so we get..."| B_PRO["A working bucketed UI in days,<br/>still frontend only"]
+    B -->|"but we ship with..."| B_CON["A hardcoded list of categories,<br/>that drifts whenever an admin adds or renames anything"]
+
+    C -->|"so we get..."| C_PRO["Caselaw actually showing up in the Library,<br/>matching the spec word for word"]
+    C -->|"but we have to commit to..."| C_CON["Backend AND frontend work,<br/>which is a much larger ticket and a separate scope"]
+
+    A_PRO -.->|"could later be upgraded to..."| C
+    A_CON -.->|"feeds into the decision because users will complain"| D
+    B_CON -.->|"feeds into the decision because of maintenance cost"| D
+    C_CON -.->|"feeds into the decision because of timeline"| D
+
+    D{"Pick one.<br/>The decision belongs to Josh and Rebecca,<br/>not to engineering."}
+
+    style A fill:#1f3a5a,stroke:#3a6aa0,color:#c8def0
+    style B fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+    style C fill:#5a3a1a,stroke:#8a6a3a,color:#f0d8b0
+    style D fill:#5a4a1a,stroke:#8a7a3a,color:#f5e8b0
+    style A_CON fill:#3a2a2a,stroke:#5a3a3a,color:#d8b8b8
+    style B_CON fill:#3a2a2a,stroke:#5a3a3a,color:#d8b8b8
+    style C_CON fill:#3a2a2a,stroke:#5a3a3a,color:#d8b8b8
+    style A_PRO fill:#1f3a2a,stroke:#3a6a4a,color:#c8e0d0
+    style B_PRO fill:#1f3a2a,stroke:#3a6a4a,color:#c8e0d0
+    style C_PRO fill:#1f3a2a,stroke:#3a6a4a,color:#c8e0d0
+
+</pre>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+</script>
+</body></html>

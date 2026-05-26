@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>VAIR → AIR migration plan (M4..M8)</title>
+  <style>
+    body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 2rem; }
+    h1 { color: #8b949e; font-weight: 500; font-size: 1.2rem; margin: 0 0 1.5rem 0; }
+    .card { background: #161b22; padding: 1.5rem; border-radius: 8px; border: 1px solid #30363d; }
+  </style>
+</head>
+<body>
+  <h1>VAIR → AIR migration plan (M4..M8)</h1>
+  <div class="card">
+    <pre class="mermaid">
+flowchart TB
+  classDef now fill:#5a2a2a,stroke:#8a3a3a,color:#f5d0d0
+  classDef m4 fill:#5a4a1a,stroke:#8a7a3a,color:#f5e8b0
+  classDef m5 fill:#1f3a5a,stroke:#3a6aa0,color:#c8def0
+  classDef m6 fill:#5a3a1a,stroke:#8a6a3a,color:#f0d8b0
+  classDef m7 fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+  classDef m8 fill:#3a1f4a,stroke:#6a3a8a,color:#e0c8f0
+
+  subgraph NOW["Hoy — VAIR en GitHub Actions"]
+    direction LR
+    GHA["GH Actions runner<br/>(workflow_dispatch)"]
+    EXEC["Executor + AgentRunner<br/>ClaudeSDKAgentRunner"]
+    API["Anthropic API key<br/>$ por token"]
+    GHA --> EXEC --> API
+  end
+  class GHA,EXEC,API now
+
+  subgraph M4["M4 — Adapter VAIR→SQS"]
+    direction LR
+    DISP["dispatch.py crea AIR Job<br/>JSON envelope"]
+    SEND["boto3.sqs.send_message<br/>al air-jobs"]
+    DISP --> SEND
+  end
+  class DISP,SEND m4
+
+  subgraph M5["M5 — Worker capabilities"]
+    direction LR
+    GH["gh CLI + git push<br/>preinstalado en AMI"]
+    APP["GitHub App token<br/>(rotacion cada 1h)"]
+    PERM["EC2 instance role:<br/>secretsmanager:GetSecretValue"]
+    GH --- APP --- PERM
+  end
+  class GH,APP,PERM m5
+
+  subgraph M6["M6 — Cutover review pipeline"]
+    direction LR
+    R1["GH Action /ai-review<br/>encola SQS y sale"]
+    R2["AIR worker procesa<br/>postea comments via gh"]
+    R3["Idempotente, bajo riesgo"]
+    R1 --> R2 --> R3
+  end
+  class R1,R2,R3 m6
+
+  subgraph M7["M7 — Cutover prompt-deploy + work"]
+    direction LR
+    W1["work.py + prompt_deploy.py<br/>encolan SQS"]
+    W2["AIR worker hace commits<br/>+ abre draft PR"]
+    W3["Plane status actualiza<br/>via API call"]
+    W1 --> W2 --> W3
+  end
+  class W1,W2,W3 m7
+
+  subgraph M8["M8 — Decommission"]
+    direction LR
+    D1["Borrar ClaudeSDKAgentRunner<br/>de vair/"]
+    D2["Quitar ANTHROPIC_API_KEY<br/>de secrets GH"]
+    D3["GH Actions = solo trigger<br/>+ artefacto polling"]
+    D1 --> D2 --> D3
+  end
+  class D1,D2,D3 m8
+
+  NOW -.->|"motivacion: $ -> Max quota"| M4
+  M4 --> M5 --> M6 --> M7 --> M8
+    </pre>
+  </div>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+  </script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VAIR Pipelines — Adversarial Pair Overview (2026-05-13)</title>
+<style>
+  body { background: #0d1117; color: #e6edf3; font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 32px; max-width: 1280px; margin: 0 auto; }
+  h1 { color: #e6edf3; font-weight: 600; }
+  h2 { color: #c8def0; border-bottom: 1px solid #30363d; padding-bottom: 4px; font-weight: 500; margin-top: 32px; }
+  .meta { color: #8b949e; font-size: 13px; margin-bottom: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 24px; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #30363d; vertical-align: top; }
+  th { background: #1f242c; color: #c8def0; font-weight: 600; }
+  tr:hover { background: #1a1f26; }
+  code { background: #1f242c; padding: 1px 6px; border-radius: 3px; font-size: 13px; color: #f5e8b0; }
+  .status-shipped { color: #c8f0d0; }
+  .status-pending { color: #f5e8b0; }
+  .status-infra { color: #c8def0; }
+  ul { line-height: 1.7; }
+  ul li::marker { color: #8b949e; }
+  a { color: #79c0ff; }
+</style>
+</head>
+<body>
+
+<h1>VAIR Pipelines — Adversarial Pair Overview</h1>
+<p class="meta">Snapshot: 2026-05-13 · Three pipelines, two perspectives each (Codex + Claude), one cross-cutting infra improvement.</p>
+
+<div class="card">
+<h2>Pipeline matrix</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Pipeline</th>
+      <th>Trigger</th>
+      <th>Mode</th>
+      <th>Adversarial status</th>
+      <th>Philosophy</th>
+      <th>Exit</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>/ai-review</code></td>
+      <td>PR opened or comment</td>
+      <td>Read-only diagnostic</td>
+      <td class="status-shipped">✅ Shipped in prod (PR #61, flag <code>VAIR_REVIEW_MULTI_PERSPECTIVE=1</code>)</td>
+      <td>Codex proposes the critique draft; Claude challenges it and synthesizes a final report. The disagreement between models is the signal — single-engine review misses ~30% of findings the pair catches.</td>
+      <td>Inline comments + APPROVE / COMMENT / REQUEST_CHANGES verdict.</td>
+    </tr>
+    <tr>
+      <td><code>/ai-remedy approve</code></td>
+      <td>PR comment by Bernard</td>
+      <td>Write-capable patch</td>
+      <td class="status-pending">🟡 Pending PR #89 merge (twin code + workflow wire-up + Codex CLI install)</td>
+      <td>Codex proposes the remediation plan as text; Claude executes it through real tools (Edit / Bash / Write). Adversarial here means Codex's plan is a "second opinion" Claude can reject and rewrite mid-flight.</td>
+      <td>Commit + push to PR branch + submit APPROVE review.</td>
+    </tr>
+    <tr>
+      <td><code>/ai-work</code></td>
+      <td>Workflow dispatch (Plane VISAL-XXX)</td>
+      <td>Autonomous resolve</td>
+      <td class="status-pending">🟡 Pending PR #91 merge (twin code) + workflow wire-up follow-up</td>
+      <td>Same shape as remedy but starts from an issue (no PR yet). Codex proposes the fix plan; Claude executes, commits, verifies build, opens PR, updates Plane state to In Review. Substance gate (VIS-553/364 guard) refuses to push if zero file changes — protects against false-positive "already done" claims.</td>
+      <td>New PR + Plane state moved to In Review.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Cross-cutting infra (no pipeline of its own)</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Component</th>
+      <th>Status</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Streaming Job Summary (PR #90)</td>
+      <td class="status-infra">🟡 Pending merge</td>
+      <td>Header written on entry, partial trace appended after every <code>trace.record(...)</code>, <code>try/finally</code> guarantees final write even on uncaught exceptions. Today work runs are summary-blind for ~4 min until completion; this surfaces progress per stage and never loses the trace.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Flow diagram</h2>
+<pre class="mermaid">
+flowchart TB
+    classDef shipped fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
+    classDef pending fill:#5a4a1a,stroke:#8a7a3a,color:#f5e8b0
+    classDef infra fill:#1f3a5a,stroke:#3a6aa0,color:#c8def0
+    classDef trigger fill:#5a3a1a,stroke:#8a6a3a,color:#f0d8b0
+
+    User([Bernard or teammate]):::trigger
+
+    subgraph REVIEW["/ai-review — READ-ONLY diagnostic — SHIPPED"]
+        direction TB
+        R_in[PR diff + rules + context]
+        R_codex[Codex<br/>generates draft critique]
+        R_claude[Claude<br/>synthesizes final review]
+        R_out[Inline comments<br/>+ APPROVE / COMMENT / REQUEST_CHANGES]
+        R_in --> R_codex
+        R_in --> R_claude
+        R_codex --> R_claude
+        R_claude --> R_out
+    end
+
+    subgraph REMEDY["/ai-remedy approve — WRITE-CAPABLE patch — PR #89"]
+        direction TB
+        M_in[Prior review findings<br/>+ approve flag]
+        M_codex[Codex<br/>proposes remediation plan]
+        M_claude[Claude<br/>executes Edit / Bash / Write]
+        M_out[Commit + push<br/>+ submit APPROVE review]
+        M_in --> M_codex
+        M_in --> M_claude
+        M_codex --> M_claude
+        M_claude --> M_out
+    end
+
+    subgraph WORK["/ai-work — AUTONOMOUS resolve — PR #91"]
+        direction TB
+        W_in[Plane VISAL-XXX issue<br/>+ workspace clone]
+        W_codex[Codex<br/>proposes resolution plan]
+        W_claude[Claude<br/>executes + verifies build]
+        W_out[New branch + commits<br/>+ PR + Plane state update]
+        W_in --> W_codex
+        W_in --> W_claude
+        W_codex --> W_claude
+        W_claude --> W_out
+    end
+
+    INFRA[Streaming Job Summary — PR #90<br/>header + per-stage updates + try/finally]:::infra
+
+    User --> REVIEW
+    User --> REMEDY
+    User --> WORK
+
+    INFRA -.observes.-> WORK
+
+    class R_codex,R_claude,R_in,R_out shipped
+    class M_codex,M_claude,M_in,M_out pending
+    class W_codex,W_claude,W_in,W_out pending
+</pre>
+</div>
+
+<div class="card">
+<h2>Philosophy in one paragraph</h2>
+<p>Every VAIR pipeline runs <strong>two competing models with different priors</strong> — Codex (OpenAI) generates the first draft; Claude (Anthropic) is given Codex's output as adversarial input and decides whether to extend, refine, or reject it. The contradiction between the two models is the load-bearing signal: agreement is high-confidence, disagreement triggers deeper analysis, rejection by Claude is logged as a finding in itself. Read-only pipelines (<code>review</code>) terminate at a verdict; write-capable pipelines (<code>remedy</code>, <code>work</code>) push Claude's final synthesis through Edit / Bash / Write tools and into git history. A substance gate refuses to push when zero changes were made, protecting against the "already implemented" false positive. When Codex is unreachable, every pipeline falls back to <code>claude_only</code> mode with byte-equivalent behavior — strict no-regression invariant.</p>
+</div>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose", themeVariables: { background: "#0d1117", primaryColor: "#1f242c", primaryTextColor: "#e6edf3", primaryBorderColor: "#30363d", lineColor: "#6a737d", fontFamily: "-apple-system, system-ui, sans-serif" } });
+</script>
+
+</body>
+</html>
