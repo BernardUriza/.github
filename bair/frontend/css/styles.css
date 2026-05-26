@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   VAIR Dashboard — Design Tokens & Global Styles
+   BAIR Dashboard — Design Tokens & Global Styles
    ═══════════════════════════════════════════════════════════ */
 
 :root {
@@ -83,11 +83,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
                     font-weight: 400; letter-spacing: 0.02em; animation: fadeUp 1.2s ease 0.3s both; }
 .landing-subtitle em { font-style: italic; color: var(--purple-glow); font-family: 'Instrument Serif', serif;
                        font-size: 1.125rem; }
-.vair-r-slot { display: inline-block; min-width: 14ch; text-align: left;
+.bair-r-slot { display: inline-block; min-width: 14ch; text-align: left;
                color: var(--purple-glow); font-variant-ligatures: none; }
-.vair-r-slot::after { content: "▎"; opacity: 0.35; margin-left: 2px;
-                      animation: vair-blink 1.1s steps(2) infinite; }
-@keyframes vair-blink { 50% { opacity: 0; } }
+.bair-r-slot::after { content: "▎"; opacity: 0.35; margin-left: 2px;
+                      animation: bair-blink 1.1s steps(2) infinite; }
+@keyframes bair-blink { 50% { opacity: 0; } }
 
 
 .enter-btn { margin-top: 2.5rem; display: inline-flex; align-items: center; gap: 0.5rem;
@@ -377,7 +377,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
                       font-size: 0.6875rem; font-family: 'DM Sans', sans-serif; outline: none; }
 /* Header refresh buttons are read-only actions (refetch data) — outlined
    secondary instead of filled purple. Reserves the filled-purple primary
-   weight for actions that commit something (Run VAIR, Validate & save). */
+   weight for actions that commit something (Run BAIR, Validate & save). */
 .runs-header button {
   background: transparent; color: var(--text-muted);
   border: 1px solid var(--border); border-radius: 6px;
@@ -518,7 +518,7 @@ a:hover { color: var(--purple); }
 }
 .dispatch-fallback .dispatch-input:focus { border-color: var(--purple); }
 
-/* AI Review row — input + Run VAIR review button on a single line. Replaces
+/* AI Review row — input + Run BAIR review button on a single line. Replaces
    the previous vertical LABEL/INPUT/BUTTON stack. Same shape as
    .dispatch-fallback but without the leading "or" separator since this row
    IS the primary action, not an alternative path. */
@@ -635,8 +635,8 @@ a:hover { color: var(--purple); }
 .loading-msg { display: flex; align-items: center; gap: 0.5rem; color: var(--text-dim);
                font-size: 0.75rem; padding: 2rem; justify-content: center; }
 
-/* ═══ VAIR Chat (floating MVP) ═══════════════════════════════════════ */
-.vair-chat-panel {
+/* ═══ BAIR Chat (floating MVP) ═══════════════════════════════════════ */
+.bair-chat-panel {
   position: fixed;
   bottom: 1.25rem;
   right: 1.25rem;
@@ -652,7 +652,7 @@ a:hover { color: var(--purple); }
   overflow: hidden;
 }
 @media (max-width: 640px) {
-  .vair-chat-panel {
+  .bair-chat-panel {
     inset: auto 0.75rem 0.75rem 0.75rem;
     width: auto;
     height: min(70vh, 540px);
@@ -709,21 +709,21 @@ a:hover { color: var(--purple); }
 .chat-bubble:hover .chat-copy-btn { opacity: 1; }
 .chat-bubble .chat-copy-btn:hover { color: var(--text); }
 .chat-bubble .chat-copy-btn.copied { color: var(--green); opacity: 1; }
-.vair-chat-panel.hidden { display: none !important; }
+.bair-chat-panel.hidden { display: none !important; }
 /* When chat is open (not hidden, not minimized) reserve right-side space on the
    bento so pulls-panel and runs-panel are never covered by the fixed chat. */
-#app:has(#vair-chat:not(.hidden):not(.minimized)) .bento { padding-right: calc(400px + 0.875rem); }
-.vair-chat-panel.minimized {
+#app:has(#bair-chat:not(.hidden):not(.minimized)) .bento { padding-right: calc(400px + 0.875rem); }
+.bair-chat-panel.minimized {
   height: auto;
   width: min(280px, calc(100vw - 2.5rem));
 }
-.vair-chat-panel.minimized .chat-stream,
-.vair-chat-panel.minimized .chat-input-row,
-.vair-chat-panel.minimized .chat-chips,
-.vair-chat-panel.minimized .chat-snapshot-pill {
+.bair-chat-panel.minimized .chat-stream,
+.bair-chat-panel.minimized .chat-input-row,
+.bair-chat-panel.minimized .chat-chips,
+.bair-chat-panel.minimized .chat-snapshot-pill {
   display: none;
 }
-.vair-chat-panel.minimized .chat-head { border-bottom: none; }
+.bair-chat-panel.minimized .chat-head { border-bottom: none; }
 .chat-user {
   align-self: flex-end;
   background: var(--purple);

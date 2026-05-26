@@ -313,11 +313,11 @@ def _render_trend(root, trend):
 # ── 4. Outreach table with evidence drilldown ────────────────────────
 
 # V1 = legacy surfaces (gen + drafts); V2 = Core 2.0. An org's V1 count is the
-# SUM across all V1 log groups, not just gen — otherwise drafts.visalaw.ai usage
+# SUM across all V1 log groups, not just gen — otherwise drafts.bernard-org.ai usage
 # is invisible in the drilldown.
-_V1_LOGS = ("/ecs/visalawgen_production", "/ecs/visalaw-drafts-prod",
-            "/ecs/visalaw-drafts-standalone-prod")
-_V2_LOGS = ("/ecs/visalaw-v2-prod", "/ecs/visalaw-v2-standalone-prod")
+_V1_LOGS = ("/ecs/visalawgen_production", "/ecs/bernard-org-drafts-prod",
+            "/ecs/bernard-org-drafts-standalone-prod")
+_V2_LOGS = ("/ecs/bernard-org-v2-prod", "/ecs/bernard-org-v2-standalone-prod")
 
 
 def _side_count(evidence, groups):
@@ -462,14 +462,14 @@ def _render_notes(root, diag, sources, sig_meta):
     cov = diag.get("signalSourceCoverage", {}) or {}
     cc = (sig_meta or {}).get("confidenceCounts", {})
     notes = [
-        "Terminology — V1 = legacy (gen.visalaw.ai + drafts.visalaw.ai). "
-        "V2 = Core 2.0 (app.visalaw.ai); Josh refers to V2 as \"Drafts 2.1\".",
+        "Terminology — V1 = legacy (gen.bernard-org.ai + drafts.bernard-org.ai). "
+        "V2 = Core 2.0 (app.bernard-org.ai); Josh refers to V2 as \"Drafts 2.1\".",
         "Mongo snapshot: " + ("healthy." if mongo_ok else "unavailable."),
     ]
     if resolved:
         notes.append("Classifier source: CloudWatch runtime logs — org UUID presence. "
-                     "V1 = /ecs/visalawgen_production + /ecs/visalaw-drafts-prod; "
-                     "V2 = /ecs/visalaw-v2-prod.")
+                     "V1 = /ecs/visalawgen_production + /ecs/bernard-org-drafts-prod; "
+                     "V2 = /ecs/bernard-org-v2-prod.")
         notes.append(
             "Secondary signal: not available. "
             "Current classification is based on runtime log presence only. "

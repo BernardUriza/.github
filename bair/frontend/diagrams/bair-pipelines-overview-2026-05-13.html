@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>VAIR Pipelines — Adversarial Pair Overview (2026-05-13)</title>
+<title>BAIR Pipelines — Adversarial Pair Overview (2026-05-13)</title>
 <style>
   body { background: #0d1117; color: #e6edf3; font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 32px; max-width: 1280px; margin: 0 auto; }
   h1 { color: #e6edf3; font-weight: 600; }
@@ -24,7 +24,7 @@
 </head>
 <body>
 
-<h1>VAIR Pipelines — Adversarial Pair Overview</h1>
+<h1>BAIR Pipelines — Adversarial Pair Overview</h1>
 <p class="meta">Snapshot: 2026-05-13 · Three pipelines, two perspectives each (Codex + Claude), one cross-cutting infra improvement.</p>
 
 <div class="card">
@@ -59,7 +59,7 @@
     </tr>
     <tr>
       <td><code>/ai-work</code></td>
-      <td>Workflow dispatch (Plane VISAL-XXX)</td>
+      <td>Workflow dispatch (Plane <tracker-prefix>-XXX)</td>
       <td>Autonomous resolve</td>
       <td class="status-pending">🟡 Pending PR #91 merge (twin code) + workflow wire-up follow-up</td>
       <td>Same shape as remedy but starts from an issue (no PR yet). Codex proposes the fix plan; Claude executes, commits, verifies build, opens PR, updates Plane state to In Review. Substance gate (VIS-553/364 guard) refuses to push if zero file changes — protects against false-positive "already done" claims.</td>
@@ -126,7 +126,7 @@ flowchart TB
 
     subgraph WORK["/ai-work — AUTONOMOUS resolve — PR #91"]
         direction TB
-        W_in[Plane VISAL-XXX issue<br/>+ workspace clone]
+        W_in[Plane <tracker-prefix>-XXX issue<br/>+ workspace clone]
         W_codex[Codex<br/>proposes resolution plan]
         W_claude[Claude<br/>executes + verifies build]
         W_out[New branch + commits<br/>+ PR + Plane state update]
@@ -152,7 +152,7 @@ flowchart TB
 
 <div class="card">
 <h2>Philosophy in one paragraph</h2>
-<p>Every VAIR pipeline runs <strong>two competing models with different priors</strong> — Codex (OpenAI) generates the first draft; Claude (Anthropic) is given Codex's output as adversarial input and decides whether to extend, refine, or reject it. The contradiction between the two models is the load-bearing signal: agreement is high-confidence, disagreement triggers deeper analysis, rejection by Claude is logged as a finding in itself. Read-only pipelines (<code>review</code>) terminate at a verdict; write-capable pipelines (<code>remedy</code>, <code>work</code>) push Claude's final synthesis through Edit / Bash / Write tools and into git history. A substance gate refuses to push when zero changes were made, protecting against the "already implemented" false positive. When Codex is unreachable, every pipeline falls back to <code>claude_only</code> mode with byte-equivalent behavior — strict no-regression invariant.</p>
+<p>Every BAIR pipeline runs <strong>two competing models with different priors</strong> — Codex (OpenAI) generates the first draft; Claude (Anthropic) is given Codex's output as adversarial input and decides whether to extend, refine, or reject it. The contradiction between the two models is the load-bearing signal: agreement is high-confidence, disagreement triggers deeper analysis, rejection by Claude is logged as a finding in itself. Read-only pipelines (<code>review</code>) terminate at a verdict; write-capable pipelines (<code>remedy</code>, <code>work</code>) push Claude's final synthesis through Edit / Bash / Write tools and into git history. A substance gate refuses to push when zero changes were made, protecting against the "already implemented" false positive. When Codex is unreachable, every pipeline falls back to <code>claude_only</code> mode with byte-equivalent behavior — strict no-regression invariant.</p>
 </div>
 
 <script type="module">

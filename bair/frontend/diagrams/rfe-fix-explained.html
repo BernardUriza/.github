@@ -19,7 +19,7 @@
     <p class="sub">Why RFE drafts shipped raw placeholders, and what PR #1422 changed.</p>
     <pre class="mermaid">
 flowchart TD
-    A["Emily launches an RFE draft<br/>(app.visalaw.ai)"] --> B{"Which generation path<br/>does the draft take?"}
+    A["Emily launches an RFE draft<br/>(app.bernard-org.ai)"] --> B{"Which generation path<br/>does the draft take?"}
 
     B -->|"BEFORE: RFE silently fell<br/>to the legacy path"| C["Legacy Browserless flow"]
     B -->|"AFTER PR #1422: RFE routed<br/>by projectTypeId 190"| D["In-process v2 flow"]

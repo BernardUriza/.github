@@ -1,14 +1,14 @@
-"""VAIR Dashboard — constants and configuration."""
+"""BAIR Dashboard — constants and configuration."""
 
 VERSION = "1.0.83"
 
 API = "https://api.github.com"
 
-PLANE_WORKSPACE = "visalaw-ai"
+PLANE_WORKSPACE = "bernard-org-ai"
 PLANE_PROJECT_ID = "28e52ace-f4e7-44d5-83b0-1b8569eac82b"
-PLANE_PROJECT_IDENTIFIER = "VISAL"
-REPO = "Visalaw/.github"
-ORG = "Visalaw"
+PLANE_PROJECT_IDENTIFIER = "<tracker-prefix>"
+REPO = "bernard-org/.github"
+ORG = "bernard-org"
 
 WORKFLOWS = {
     "ai-dispatch.yml": "AI Review",

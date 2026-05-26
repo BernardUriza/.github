@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>VAIR — Visalaw AI Reviewer</title>
+  <title>BAIR — bernard-org AI Reviewer</title>
   <link rel="icon" href="favicon.ico" type="image/x-icon">
 
   <!-- Open Graph (WhatsApp, Slack, iMessage, LinkedIn) -->
-  <meta property="og:title" content="VAIR — Visalaw AI Reviewer">
-  <meta property="og:description" content="Autonomous code review, changelog generation, and issue resolution for the Visalaw engineering team. Powered by GPT-5.4 + Claude.">
+  <meta property="og:title" content="BAIR — bernard-org AI Reviewer">
+  <meta property="og:description" content="Autonomous code review, changelog generation, and issue resolution for the bernard-org engineering team. Powered by GPT-5.4 + Claude.">
   <meta property="og:image" content="https://i.imgur.com/ECs1Ss7.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://visalaw.github.io/.github/">
+  <meta property="og:url" content="https://bernard-org.github.io/.github/">
 
   <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="VAIR — Visalaw AI Reviewer">
+  <meta name="twitter:title" content="BAIR — bernard-org AI Reviewer">
   <meta name="twitter:description" content="Autonomous code review, changelog generation, and issue resolution. GPT-5.4 + Claude.">
   <meta name="twitter:image" content="https://i.imgur.com/ECs1Ss7.png">
 
@@ -40,10 +40,10 @@
     <div class="grain"></div>
     <canvas id="particles"></canvas>
 
-    <img class="landing-logo" src="img/vair-logo.png" alt="VAIR" draggable="false">
+    <img class="landing-logo" src="img/bair-logo.png" alt="BAIR" draggable="false">
 
     <div class="landing-content">
-      <p class="landing-subtitle">Visalaw <em>Artificial Intelligence</em> <span class="vair-r-slot" data-r-cycle>Reviewer</span></p>
+      <p class="landing-subtitle">bernard-org <em>Artificial Intelligence</em> <span class="bair-r-slot" data-r-cycle>Reviewer</span></p>
       <div class="landing-actions">
         <button class="enter-btn" id="open-login-btn">
           Enter Dashboard
@@ -60,7 +60,7 @@
       </div>
     </div>
 
-    <div class="version-tag" id="version-tag">internal tool &middot; visalaw.ai</div>
+    <div class="version-tag" id="version-tag">internal tool &middot; bernard-org.ai</div>
   </div>
 
   <!-- ═══ LOGIN MODAL ═══ -->
@@ -79,7 +79,7 @@
       <div class="login-error" id="login-error"></div>
       <button class="login-btn" id="login-btn">Sign in</button>
       <div class="hint">
-        <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=VAIR+Dashboard" target="_blank">GitHub token</a>
+        <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=BAIR+Dashboard" target="_blank">GitHub token</a>
         with <code>repo</code> + <code>workflow</code> scopes.<br>
         Stored in <code>localStorage</code> &mdash; persists across browser restarts.
       </div>
@@ -89,7 +89,7 @@
   <!-- ═══ APP SHELL — Bento Grid ═══ -->
   <div class="app" id="app">
     <div class="topbar">
-      <div class="logo"><span>VAIR</span> Dashboard <div class="logo-dot"></div></div>
+      <div class="logo"><span>BAIR</span> Dashboard <div class="logo-dot"></div></div>
       <div class="topbar-search">
         <span class="search-icon">/</span>
         <input id="global-search" type="search" placeholder="Search issues, PRs, branches..." spellcheck="false" autocomplete="off">
@@ -113,8 +113,8 @@
       <div class="g-card runs-panel" id="pulls-panel" style="grid-area:prs"></div>
     </div>
 
-    <!-- ═══ VAIR Chat (floating, bottom-right) ═══ -->
-    <div id="vair-chat" class="vair-chat-panel"></div>
+    <!-- ═══ BAIR Chat (floating, bottom-right) ═══ -->
+    <div id="bair-chat" class="bair-chat-panel"></div>
   </div>
 
   <!-- ═══ PARTICLES (vanilla JS) ═══ -->

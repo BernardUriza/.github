@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>VISAL-18 — Draft attachment S3 key mismatch</title>
+  <title><ticket-id> — Draft attachment S3 key mismatch</title>
   <style>
     body { background: #0d1117; color: #e6edf3; font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 32px; }
     h1 { color: #8b949e; font-weight: 600; font-size: 20px; margin: 0 0 4px; }
@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-  <h1>VISAL-18 — Draft attachment fails: S3 folder mismatch</h1>
+  <h1><ticket-id> — Draft attachment fails: S3 folder mismatch</h1>
   <p class="sub">A project file lives under <code>uploads/personal-library</code>, but the standalone looks for it under the draft folder (or a flat key) &rarr; 404 &rarr; status never leaves <code>queue</code> &rarr; NEXT stays disabled.</p>
   <div class="card">
     <pre class="mermaid">
@@ -51,7 +51,7 @@ flowchart TD
     style FX3 fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
     </pre>
   </div>
-  <footer>VISAL-18 &mdash; verified live against the v2 uploads bucket: flat key 404, draft-folder key 404, personal-library key 200.</footer>
+  <footer><ticket-id> &mdash; verified live against the v2 uploads bucket: flat key 404, draft-folder key 404, personal-library key 200.</footer>
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
     mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });

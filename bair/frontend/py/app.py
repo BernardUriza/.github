@@ -1,4 +1,4 @@
-"""VAIR Dashboard — entry point. Binds events and handles auto-login."""
+"""BAIR Dashboard — entry point. Binds events and handles auto-login."""
 
 from browser import ajax, document, timer, window
 
@@ -7,7 +7,7 @@ from .config import VERSION
 from .state import state
 from .ux import bind_topbar_search, render_control_panel, render_health_panel
 
-document["version-tag"].text = f"v{VERSION} · internal tool · visalaw.ai"
+document["version-tag"].text = f"v{VERSION} · internal tool · bernard-org.ai"
 
 
 # ── Event bindings ───────────────────────────────────────────────

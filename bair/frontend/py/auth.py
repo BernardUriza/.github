@@ -184,7 +184,7 @@ def _show_app():
 def logout(ev=None):
     """Clear all tokens from state and localStorage, return to landing.
 
-    Includes the OpenAI BYOK token: switching VAIR users should not leave
+    Includes the OpenAI BYOK token: switching BAIR users should not leave
     the previous user's OpenAI key reachable to the next one (different
     person = different billing). The OpenAI key is stored in localStorage
     under `vair_openai_token`.

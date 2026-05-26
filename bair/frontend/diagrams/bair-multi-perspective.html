@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>VAIR Architecture Plan — Evidence-Based, May 2026</title>
+<html><head><meta charset="utf-8"><title>BAIR Architecture Plan — Evidence-Based, May 2026</title>
 <style>
   body{font-family:system-ui;margin:24px;background:#0d1117;color:#e6edf3;max-width:1400px}
   h1{font-size:20px;color:#e6edf3;margin:0 0 8px;font-weight:600}
@@ -17,7 +17,7 @@
 </style>
 </head><body>
 
-<h1>VAIR Architecture Plan — Evidence-Based, May 2026</h1>
+<h1>BAIR Architecture Plan — Evidence-Based, May 2026</h1>
 <p>Plan arquitectonico respaldado por 22 fuentes (arxiv + produccion 2025-2026). <strong>Tres adiciones criticas sobre v6</strong>: evidence gate + claim decomposition (Harvey 0.2% vs Lexis 17-33%), security pass mandatory (Sherlock 2026: 31% vulns en helpers/config), HITL para wrong-requirements no para implementation errors. El diseno de v6 se confirma y fortalece.</p>
 
 <div class="note green"><strong>Lo que v6 tenia correcto (confirmado por evidencia):</strong> Two-commit adversarial — vendor heterogeneity justificado por arxiv 2502.08788. gpt-5.5 SSOT hardcoded. SharedExecutionContext immutable. Verdict FSM. Transport + Publisher por pipeline. Todo se mantiene.</div>
@@ -99,7 +99,7 @@ sequenceDiagram
     C->>C: genera CodexProposal con diff y concerns
     C->>C: valida diff size y paths
     C->>W: git apply diff
-    C->>G: commit author vair-codex
+    C->>G: commit author bair-codex
     G-->>C: codex_sha
 
     Note over W,G: HEAD contiene propuesta de Codex como estado real del repo
@@ -380,7 +380,7 @@ sequenceDiagram
 
 <div class="mermaid">
 flowchart TD
-    AI["<b>vair/</b>"]
+    AI["<b>bair/</b>"]
 
     AI --> CTR2["<b>contracts/</b> NEW<br/>LlmProvider · Transport · Publisher<br/>Repository · Clock<br/>zero deps internas"]
     AI --> DOM2["<b>domain/</b><br/>ExecutionPlan · Verdict · SharedContext<br/>Learning · exceptions"]
@@ -404,7 +404,7 @@ flowchart TD
 <h2>14. Anti-patterns — evidencia empirica, no opinion</h2>
 
 <table>
-  <tr><th>Anti-pattern</th><th>Sintoma</th><th>Evidencia</th><th>Solucion VAIR</th></tr>
+  <tr><th>Anti-pattern</th><th>Sintoma</th><th>Evidencia</th><th>Solucion BAIR</th></tr>
   <tr><td><strong>Multi-agent sin heterogeneidad</strong></td><td>Mismo vendor, blind spots compartidos</td><td>arxiv 2502.08788: debate no supera single-agent sin heterogeneidad de vendor</td><td>Codex (OpenAI) + Claude (Anthropic) — distintos training, distintos failure modes</td></tr>
   <tr><td><strong>Provider spaghetti</strong></td><td><code>if model.startswith("gpt")</code> en N call sites</td><td>LangChain: migration months of work tras deep coupling (sph.sh)</td><td><code>contracts/LlmProvider</code> Protocol — adapters en infra/</td></tr>
   <tr><td><strong>Orchestration God Object</strong></td><td>Constructor 5+ deps, 800 LOC</td><td>LangGraph 1.0 hard-won lessons</td><td>stages/ composables + executor generico</td></tr>
@@ -424,7 +424,7 @@ flowchart TD
 flowchart LR
     CI["CI Pipeline"]
 
-    CI --> FF1["<b>Layer Purity Test</b><br/>import-linter: domain/ no importa infra/<br/>contracts/ no importa vair.*"]
+    CI --> FF1["<b>Layer Purity Test</b><br/>import-linter: domain/ no importa infra/<br/>contracts/ no importa bair.*"]
     CI --> FF2["<b>Provider Isolation Test</b><br/>cualquier pipeline corre con LlmProvider fake<br/>zero OpenAI SDK calls reales"]
     CI --> FF3["<b>Procedence Completeness</b><br/>todo Verdict lleva model_id<br/>prompt_hash y commit_sha"]
     CI --> FF4["<b>SSOT Model Invariant</b><br/>test_openai_model_invariant.py<br/>120/120 verde — YA EXISTE"]

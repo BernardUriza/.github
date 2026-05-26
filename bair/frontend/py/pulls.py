@@ -1,4 +1,4 @@
-"""VAIR Pull Requests panel — open PRs with filters, sorting, Vercel links."""
+"""BAIR Pull Requests panel — open PRs with filters, sorting, Vercel links."""
 
 from browser import document, html
 
@@ -7,18 +7,18 @@ from .filters import FilterBar
 from .table import SortableTable
 
 
-# Repos VAIR operates in — both PRs it opens AND human PRs it reviews/remedies.
+# Repos BAIR operates in — both PRs it opens AND human PRs it reviews/remedies.
 _REPOS = [
-    "Visalaw/frontend-core-2.0",
-    "Visalaw/visalaw-gen-backend",
-    "Visalaw/.github",
+    "bernard-org/frontend-core-2.0",
+    "bernard-org/bernard-org-gen-backend",
+    "bernard-org/.github",
 ]
 # Short display names. Keeps the repo cell narrow so the PR # alongside the
 # badge stays scannable. The raw repo slug remains the filter key.
 _REPO_FRIENDLY = {
     "frontend-core-2.0": "Frontend",
-    "visalaw-gen-backend": "Backend",
-    ".github": "VAIR",
+    "bernard-org-gen-backend": "Backend",
+    ".github": "BAIR",
 }
 
 # ── State ────────────────────────────────────────────────────────
@@ -43,8 +43,8 @@ _FILTERS = [
     {"key": "repo", "label": "Repo",
      "options": [
          {"value": "frontend-core-2.0",   "label": "Frontend"},
-         {"value": "visalaw-gen-backend",  "label": "Backend"},
-         {"value": ".github",              "label": "VAIR"},
+         {"value": "bernard-org-gen-backend",  "label": "Backend"},
+         {"value": ".github",              "label": "BAIR"},
      ]},
     {"key": "status", "label": "Status",
      "options": [
@@ -190,7 +190,7 @@ def render_pulls_panel():
     panel.clear()
 
     header = html.DIV(Class="runs-header")
-    header <= html.H3("VAIR Pull Requests")
+    header <= html.H3("BAIR Pull Requests")
     actions = html.DIV(Class="runs-header-actions")
     refresh = html.BUTTON("Refresh", title="Refetch open PRs from GitHub")
     refresh.bind("click", lambda ev: load_pulls())
@@ -206,7 +206,7 @@ def render_pulls_panel():
     _filter_bar.render()
 
     _table = SortableTable("pulls-body", _COLUMNS, _render_pr_row)
-    _table.empty_msg = "No VAIR PRs match filters."
+    _table.empty_msg = "No BAIR PRs match filters."
 
 
 def load_pulls():
@@ -228,8 +228,8 @@ def _on_pulls_loaded(req, repo):
     import json as _json
     if req.status == 200:
         prs = _json.loads(req.text)
-        # No bot-author filter. VAIR-touched PRs include human-authored PRs
-        # that VAIR reviews/remedies — not just bot-opened ones. The user's
+        # No bot-author filter. BAIR-touched PRs include human-authored PRs
+        # that BAIR reviews/remedies — not just bot-opened ones. The user's
         # own open PRs are the most actionable items on this dashboard;
         # excluding them made the panel render zero useful rows.
         for pr in prs:

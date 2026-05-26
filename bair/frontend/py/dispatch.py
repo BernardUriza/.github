@@ -23,9 +23,9 @@ from .start_work import open_modal as open_start_work_modal
 # ── Shared ───────────────────────────────────────────────────────
 
 _REPOS = [
-    ("frontend-core-2.0", "Visalaw/frontend-core-2.0"),
-    ("visalaw-gen-backend", "Visalaw/visalaw-gen-backend"),
-    ("visalaw-gen-production-frontend", "Visalaw/visalaw-gen-production-frontend"),
+    ("frontend-core-2.0", "bernard-org/frontend-core-2.0"),
+    ("bernard-org-gen-backend", "bernard-org/bernard-org-gen-backend"),
+    ("bernard-org-gen-production-frontend", "bernard-org/bernard-org-gen-production-frontend"),
 ]
 
 _SNAPSHOT_URL = "data/issues.json"
@@ -103,7 +103,7 @@ def _render_issue_card(issue):
     #   "Copy prompt" → opens local modal with branch + git checkout + Cursor /
     #     Claude starter prompts ready to paste into the dev's editor.
     #     The human does the coding.
-    #   "Run VAIR"    → fires ai-resolve.yml on GitHub Actions which spawns
+    #   "Run BAIR"    → fires ai-resolve.yml on GitHub Actions which spawns
     #     a Claude Code agent that autonomously edits files, runs tests, and
     #     opens a PR. No human in the loop until the PR appears.
     # Labels were "Start work" / "Dispatch" — both opaque about WHO does the
@@ -114,8 +114,8 @@ def _render_issue_card(issue):
     start_btn.bind("click", lambda ev, i=issue: _open_start_work(ev, i))
     meta_row <= start_btn
 
-    dispatch_btn = html.A("Run VAIR", href="#", Class="issue-dispatch-link",
-                          title="Trigger the ai-resolve.yml workflow — VAIR agent edits files and opens a PR autonomously")
+    dispatch_btn = html.A("Run BAIR", href="#", Class="issue-dispatch-link",
+                          title="Trigger the ai-resolve.yml workflow — BAIR agent edits files and opens a PR autonomously")
     dispatch_btn.bind("click", lambda ev, ident=issue["identifier"]:
                       _dispatch_from_card(ev, ident))
     meta_row <= dispatch_btn
@@ -241,7 +241,7 @@ def _trigger_resolve(ev=None, selected=None):
         except Exception:
             issue = ""
     if not issue:
-        status.html = '<span style="color:var(--red)">Pick a card or type an issue id (e.g. VISAL-677)</span>'
+        status.html = '<span style="color:var(--red)">Pick a card or type an issue id (e.g. <ticket-id>)</span>'
         return
     status.html = '<span class="spinner"></span> Dispatching...'
     gh_post(f"/repos/{REPO}/actions/workflows/ai-resolve.yml/dispatches",
@@ -255,14 +255,14 @@ def _trigger_resolve(ev=None, selected=None):
 
 
 def render_dispatch_review():
-    """Build the AI Review panel: repo + PR number + Run VAIR review.
+    """Build the AI Review panel: repo + PR number + Run BAIR review.
 
     Layout mirrors AI Resolve's manual fallback row — input + primary
     action on a single horizontal line — instead of the previous vertical
     stack (LABEL / INPUT / BUTTON). The label was redundant with the
-    placeholder; the button label now names the product (VAIR) and the
+    placeholder; the button label now names the product (BAIR) and the
     user action (run a review) so the intent reads at a glance, same
-    convention as 'Run VAIR' on AI Resolve cards.
+    convention as 'Run BAIR' on AI Resolve cards.
     """
     panel = document["dispatch-review"]
     panel.clear()
@@ -286,10 +286,10 @@ def render_dispatch_review():
     pr_input.attrs["min"] = "1"
     body <= pr_input
     btn = html.BUTTON(
-        "Run VAIR review",
+        "Run BAIR review",
         Class="dispatch-btn",
         id="review-dispatch-btn",
-        title="Posts /ai-review on the PR — VAIR workflow reads the comment and runs a code review",
+        title="Posts /ai-review on the PR — BAIR workflow reads the comment and runs a code review",
     )
     btn.attrs["type"] = "button"
     btn.bind("click", _trigger_review)

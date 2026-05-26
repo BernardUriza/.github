@@ -1,4 +1,4 @@
-"""Local-only helper for loading VAIR secrets from ~/.secrets.
+"""Local-only helper for loading BAIR secrets from ~/.secrets.
 
 This is intentionally NOT part of the GitHub Pages app. Run it only while
 developing locally; it serves the Plane PAT to the dashboard at
@@ -172,7 +172,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"VAIR local secret helper listening on http://{HOST}:{PORT}")
+    print(f"BAIR local secret helper listening on http://{HOST}:{PORT}")
     print(f"  Token source: {TOKEN_PATH}")
     print(f"  Allowed origin: {ALLOWED_ORIGIN}")
     server.serve_forever()

@@ -1,4 +1,4 @@
-"""VAIR Chat — minimal MVP chat with GPT-5.5.
+"""BAIR Chat — minimal MVP chat with GPT-5.5.
 
 Quick win cut: non-streaming POST to OpenAI Chat Completions, render full
 response when it arrives. Streaming + tool calls land in a follow-up PR.
@@ -22,14 +22,14 @@ from .state import state
 _STORAGE_OPENAI = "vair_openai_token"
 _STORAGE_MINIMIZED = "vair_chat_minimized"
 _OPENAI_API = "https://api.openai.com/v1/chat/completions"
-# SSOT mirror — must match vair/infra/constants.py:OPENAI_MODEL.
+# SSOT mirror — must match bair/infra/constants.py:OPENAI_MODEL.
 # Cross-runtime (Brython in browser) prevents direct import. If you change
 # this, change OPENAI_MODEL in constants.py first, then mirror here.
 _MODEL = "gpt-5.5"
 _SNAPSHOT_URL = "data/issues.json"  # static JSON written by plane-snapshot workflow
 
 _SYSTEM_PROMPT_BASE = (
-    "You are VAIR, a development assistant for the Visalaw engineering team. "
+    "You are BAIR, a development assistant for the bernard-org engineering team. "
     "You help engineers triage their queue, decide what to work on, and "
     "bootstrap their local environment. Be concise — engineers prefer short "
     "answers with concrete next steps over essays. When you don't know "
@@ -44,7 +44,7 @@ _SYSTEM_PROMPT_BASE = (
     "gho_*, github_pat_*, sk-*, plane_api_*, xoxb-*, base64 JWT, AWS "
     "AKIA*, hex tokens > 20 chars), refuse to acknowledge or repeat the "
     "value. Tell them it should be revoked + rotated and stop.\n"
-    "3. Visalaw handles immigration data covered by attorney-client "
+    "3. bernard-org handles immigration data covered by attorney-client "
     "privilege. Never request, store, or repeat any personally "
     "identifiable information about clients: A-numbers, passports, DOB, "
     "addresses, case numbers, full names, country of origin, employer, "
@@ -55,13 +55,13 @@ _SYSTEM_PROMPT_BASE = (
     "snapshot below or in the user's message, say 'I don't have that "
     "information' and suggest where to find it (gh CLI, app.plane.so, "
     "the repo).\n"
-    "5. When citing a Plane issue, always use the form VISAL-<id> "
-    "alongside the full URL https://app.plane.so/visalaw-ai/browse/"
-    "VISAL-<id>/ so the engineer can click through. Issue IDs without a "
+    "5. When citing a Plane issue, always use the form <tracker-prefix>-<id> "
+    "alongside the full URL https://app.plane.so/bernard-org-ai/browse/"
+    "<tracker-prefix>-<id>/ so the engineer can click through. Issue IDs without a "
     "URL are useless context.\n"
     "6. When citing GitHub PRs or commits, use the full URL "
-    "(https://github.com/Visalaw/<repo>/pull/<n> or "
-    "https://github.com/Visalaw/<repo>/commit/<sha>), not shorthand "
+    "(https://github.com/bernard-org/<repo>/pull/<n> or "
+    "https://github.com/bernard-org/<repo>/commit/<sha>), not shorthand "
     "like #123 or 7a262ef. The engineer copy-pastes your output into "
     "Slack and Plane; bare numbers lose context."
 )
@@ -167,7 +167,7 @@ def _on_snapshot_loaded(req):
         title = _truncate_words(item.get("title", "") or "", 80)
         st = item.get("state", "")
         scope = item.get("scope", "")
-        url = item.get("url", "") or f"https://app.plane.so/visalaw-ai/browse/{ident}/"
+        url = item.get("url", "") or f"https://app.plane.so/bernard-org-ai/browse/{ident}/"
         scope_tag = f" ({scope})" if scope else ""
         top_lines.append(f"  - {ident} [{st}]{scope_tag} {title} → {url}")
 
@@ -211,7 +211,7 @@ def _on_refresh_snapshot_click(ev=None):
 
 def render_chat():
     """Build the chat panel as a fixed bottom-right floating widget."""
-    panel = document["vair-chat"]
+    panel = document["bair-chat"]
     if panel is None:
         return
     panel.clear()
@@ -223,7 +223,7 @@ def render_chat():
 
     # Header
     head = html.DIV(Class="chat-head")
-    head <= html.SPAN("VAIR Chat", Class="chat-title")
+    head <= html.SPAN("BAIR Chat", Class="chat-title")
     head <= html.SPAN(_MODEL, Class="chat-model")
     pill = html.SPAN("Queue: pending",
                      id="chat-snapshot-pill",
@@ -259,7 +259,7 @@ def render_chat():
     # Message stream container — welcome line tracks the snapshot state honestly
     # rather than claiming access before it's hydrated.
     welcome = (
-        "Hola. Soy VAIR. " +
+        "Hola. Soy BAIR. " +
         {
             "ready": "Tengo cargado el snapshot de tu queue de Plane. Pregúntame qué hay en el backlog, qué trabajar primero, o cualquier cosa del repo.",
             "loading": "Estoy cargando el snapshot de tu queue. Puedes empezar a escribir y para cuando lo mandes ya estará listo.",
@@ -287,7 +287,7 @@ def render_chat():
     row = html.DIV(Class="chat-input-row")
     box = html.TEXTAREA(
         id="chat-input",
-        placeholder="Pregúntale algo a VAIR… (Shift+Enter for newline)",
+        placeholder="Pregúntale algo a BAIR… (Shift+Enter for newline)",
         Class="chat-input",
         rows="2",
     )
@@ -405,8 +405,8 @@ def reset_session():
     _queue_context = ""
     _snapshot_state = "idle"
     _snapshot_generated_at = ""
-    if "vair-chat" in document:
-        document["vair-chat"].clear()
+    if "bair-chat" in document:
+        document["bair-chat"].clear()
 
 
 def _on_chip_click(ev):
@@ -666,7 +666,7 @@ def _on_minimize_click(ev=None):
 
 
 def _apply_minimized(minimized, persist=False):
-    panel = document["vair-chat"] if "vair-chat" in document else None
+    panel = document["bair-chat"] if "bair-chat" in document else None
     if panel is None:
         return
     btn = document["chat-minimize"] if "chat-minimize" in document else None
@@ -739,7 +739,7 @@ def _open_key_modal(mode="setup"):
     mode='setup'  → empty input, Save button, copy explaining local-only storage
     mode='reset'  → shows masked saved key, Forget button, Cancel
     """
-    panel = document["vair-chat"]
+    panel = document["bair-chat"]
     if panel is None:
         return
     # Remove any existing modal first (idempotent)
@@ -770,7 +770,7 @@ def _open_key_modal(mode="setup"):
         overlay <= html.H3("Set OpenAI key", Class="chat-key-title")
         overlay <= html.P(
             "Paste a key starting with sk-. It is stored only in this "
-            "browser's localStorage — never sent to any Visalaw server "
+            "browser's localStorage — never sent to any bernard-org server "
             "and never leaves your machine except to call OpenAI.",
             Class="chat-key-desc",
         )

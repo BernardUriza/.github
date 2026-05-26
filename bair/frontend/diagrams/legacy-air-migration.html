@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>VAIR → AIR migration plan (M4..M8)</title>
+  <title>BAIR → AIR migration plan (M4..M8)</title>
   <style>
     body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 2rem; }
     h1 { color: #8b949e; font-weight: 500; font-size: 1.2rem; margin: 0 0 1.5rem 0; }
@@ -10,7 +10,7 @@
   </style>
 </head>
 <body>
-  <h1>VAIR → AIR migration plan (M4..M8)</h1>
+  <h1>BAIR → AIR migration plan (M4..M8)</h1>
   <div class="card">
     <pre class="mermaid">
 flowchart TB
@@ -21,7 +21,7 @@ flowchart TB
   classDef m7 fill:#1f4a2a,stroke:#3a8a4a,color:#c8f0d0
   classDef m8 fill:#3a1f4a,stroke:#6a3a8a,color:#e0c8f0
 
-  subgraph NOW["Hoy — VAIR en GitHub Actions"]
+  subgraph NOW["Hoy — BAIR en GitHub Actions"]
     direction LR
     GHA["GH Actions runner<br/>(workflow_dispatch)"]
     EXEC["Executor + AgentRunner<br/>ClaudeSDKAgentRunner"]
@@ -30,7 +30,7 @@ flowchart TB
   end
   class GHA,EXEC,API now
 
-  subgraph M4["M4 — Adapter VAIR→SQS"]
+  subgraph M4["M4 — Adapter BAIR→SQS"]
     direction LR
     DISP["dispatch.py crea AIR Job<br/>JSON envelope"]
     SEND["boto3.sqs.send_message<br/>al air-jobs"]
@@ -67,7 +67,7 @@ flowchart TB
 
   subgraph M8["M8 — Decommission"]
     direction LR
-    D1["Borrar ClaudeSDKAgentRunner<br/>de vair/"]
+    D1["Borrar ClaudeSDKAgentRunner<br/>de bair/"]
     D2["Quitar ANTHROPIC_API_KEY<br/>de secrets GH"]
     D3["GH Actions = solo trigger<br/>+ artefacto polling"]
     D1 --> D2 --> D3
