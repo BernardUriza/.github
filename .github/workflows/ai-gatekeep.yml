@@ -1,0 +1,91 @@
+name: BAIR Gatekeeper
+
+# Reusable workflow that replaces the broken FI AI Gatekeeper. Target
+# repos call this from their own pr-gate.yml as:
+#
+#   ai-gatekeep:
+#     uses: BernardUriza/.github/.github/workflows/ai-gatekeep.yml@main
+#     secrets: inherit
+#
+# Crucial difference vs the original VAIR/FI gatekeeper: this workflow
+# fails CLOSED. Any LLM error (401, 429, 500, timeout) results in a
+# RED status check and a "Gatekeeper unavailable" comment on the PR,
+# instead of the silent green checkmark the broken one was producing.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "git ref to checkout (defaults to PR head)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      ANTHROPIC_API_KEY:
+        description: "Anthropic API key (preferred provider)"
+        required: false
+      OPENAI_API_KEY:
+        description: "OpenAI / Azure OpenAI API key (fallback provider)"
+        required: false
+      OPENAI_BASE_URL:
+        description: "Base URL for OpenAI-compatible endpoint (Azure, OpenRouter, etc.)"
+        required: false
+
+jobs:
+  bair-gatekeep:
+    name: "BAIR Gatekeeper"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout PR head with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install xair + bair
+        run: |
+          set -e
+          pip install --no-cache-dir \
+            "git+https://github.com/BernardUriza/xair@main" \
+            "git+https://github.com/BernardUriza/.github@main#subdirectory=bair"
+
+      - name: Run BAIR gatekeep
+        id: gatekeep
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          REPO: ${{ github.repository }}
+          PR_NUM: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # NOTE: exit code from `python -m bair gatekeep` IS the gate.
+        # On BLOCK/UNAVAILABLE the pipeline exits 1 → this step fails →
+        # job status RED → calling workflow's required check blocks merge.
+        run: python -m bair gatekeep
+
+      - name: Summarize verdict in job summary
+        if: always()
+        run: |
+          {
+            echo "## BAIR Gatekeeper Verdict"
+            echo
+            echo "| Field    | Value |"
+            echo "|----------|-------|"
+            echo "| verdict  | ${{ steps.gatekeep.outputs.verdict || 'UNAVAILABLE' }} |"
+            echo "| severity | ${{ steps.gatekeep.outputs.severity || '?' }} |"
+            echo "| provider | ${{ steps.gatekeep.outputs.provider || 'none' }} |"
+            echo "| executed | ${{ steps.gatekeep.outputs.executed || 'false' }} |"
+            echo
+            echo "Full comment posted on PR. See the gatekeep step logs for diagnostic details."
+          } >> "$GITHUB_STEP_SUMMARY"
