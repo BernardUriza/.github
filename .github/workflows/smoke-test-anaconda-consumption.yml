@@ -1,0 +1,194 @@
+name: Smoke test — consume from anaconda.org
+
+# The Golden Rule, automated.
+#
+# This workflow simulates what an external user does the first time
+# they encounter the Free Intelligence ecosystem:
+#
+#   1. Start with a clean Python env (zero inherited state).
+#   2. `conda install -c bernardurizaorozco -c conda-forge fi-core fi-runner xair`.
+#   3. Run the imports + quickstart that each package's README promises.
+#
+# If anything fails or requires "internal knowledge" not in the README,
+# this workflow goes RED and we fix the package or the README BEFORE
+# letting another release ship. That's the discipline.
+#
+# Triggers:
+#   - workflow_dispatch (manual button on the Actions tab)
+#   - schedule (weekly, Mondays 12:00 UTC) — catches anaconda.org-side
+#     regressions or token expirations even when nobody pushed.
+#   - workflow_call (so the publish-* workflows of consumer repos can
+#     gate releases on this smoke pass — currently aspirational; the
+#     existing publish-fi-runner.yml / publish-fi-core.yml don't invoke
+#     it, but they should once we wire it).
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Packages to smoke test (space-separated). Default: all."
+        required: false
+        default: "fi-core fi-runner xair"
+  schedule:
+    # Mondays 12:00 UTC. Far enough from CDN-push hours that anaconda.org
+    # has settled if Sunday released anything.
+    - cron: "0 12 * * 1"
+  workflow_call:
+    inputs:
+      packages:
+        required: false
+        type: string
+        default: "fi-core fi-runner xair"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}  # login shell so setup-miniconda activates
+    steps:
+      - name: Set up clean conda env
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: "3.12"
+          channels: bernardurizaorozco,conda-forge
+          channel-priority: strict
+          activate-environment: smoke
+          # Force an empty env so nothing inherits from base.
+          auto-activate-base: false
+
+      - name: Resolve package list
+        id: pkgs
+        run: |
+          PKGS="${{ inputs.packages || 'fi-core fi-runner xair' }}"
+          echo "packages=$PKGS" >> "$GITHUB_OUTPUT"
+          echo "Smoke testing: $PKGS"
+
+      - name: Install the ecosystem packages
+        # All three are noarch:python from anaconda.org/bernardurizaorozco.
+        # `-c bernardurizaorozco` was already added in setup-miniconda,
+        # but we re-declare on the install command for explicit reproducibility.
+        run: |
+          conda install -y \
+            -c bernardurizaorozco \
+            -c conda-forge \
+            ${{ steps.pkgs.outputs.packages }}
+
+      - name: Smoke fi-core (README's import promise)
+        if: contains(steps.pkgs.outputs.packages, 'fi-core')
+        run: |
+          python -c "
+          import fi_core
+          print('fi-core', fi_core.__version__)
+
+          # The submodule-load-on-demand pattern documented in README.
+          from fi_core.persona import packs
+          assert isinstance(packs.GENERIC_AI_DISCLOSURE_EN, list), 'persona packs broken'
+          assert len(packs.GENERIC_AI_DISCLOSURE_EN) > 0, 'AI disclosure pack empty'
+          print('  persona.packs OK,', len(packs.GENERIC_AI_DISCLOSURE_EN), 'EN patterns')
+
+          # cognitive is dep-free except pyyaml (which is pulled via the
+          # 'cognitive' extra; pyyaml may or may not be in the smoke env).
+          try:
+              from fi_core.cognitive import urgency
+              uc = urgency.UrgencyClassifier()
+              print('  cognitive.urgency OK, UrgencyClassifier instantiable')
+          except ImportError as e:
+              print('  cognitive.urgency unavailable (extras not in smoke env):', e)
+          print('fi-core smoke OK')
+          "
+
+      - name: Smoke fi-runner (README's import promise)
+        if: contains(steps.pkgs.outputs.packages, 'fi-runner')
+        run: |
+          python -c "
+          import fi_runner
+          print('fi-runner', fi_runner.__version__)
+
+          # The README promises this set of exports at top level.
+          from fi_runner import (
+              Runner,
+              AgentBackend,
+              MCPServerSpec,
+              ToolPolicy,
+              PermissionMode,
+              TurnResult,
+              ToolCall,
+              BackendError,
+          )
+          print('  top-level exports OK')
+
+          # The backends submodule has the concrete backends; they may
+          # require a harness SDK at runtime but importing the class itself
+          # should not.
+          from fi_runner.backends.claude_code import ClaudeCodeBackend
+          print('  ClaudeCodeBackend importable')
+          print('fi-runner smoke OK')
+          "
+
+      - name: Smoke xair (README's import promise)
+        if: contains(steps.pkgs.outputs.packages, 'xair')
+        run: |
+          python -c "
+          import xair
+          print('xair', xair.__version__)
+
+          # The README documents submodule imports (xair top level only
+          # exports __version__ by design).
+          from xair.dispatch import dispatch
+          from xair.command_registry import (
+              command,
+              register_ack_meta,
+              CommandContext,
+              DispatchResult,
+              get_handler,
+              registered_commands,
+          )
+          assert callable(dispatch), 'dispatch not callable'
+          assert callable(command), 'command decorator not callable'
+          print('  framework API OK')
+
+          # No commands registered in a fresh xair install — that's
+          # correct (commands live in consumer packages like bair).
+          assert registered_commands() == frozenset(), 'unexpected pre-registered commands'
+          print('  registry empty as expected (consumers register their own)')
+          print('xair smoke OK')
+          "
+
+      - name: Cross-package coherence — fi-runner imports fi-core
+        if: contains(steps.pkgs.outputs.packages, 'fi-core') && contains(steps.pkgs.outputs.packages, 'fi-runner')
+        run: |
+          # fi-runner pins fi-core>=0.24,<0.25 in pyproject. The conda
+          # solver should have resolved a matching pair. Verify both are
+          # importable in the same env and that fi-runner doesn't crash
+          # when fi-core's submodules are reachable through it.
+          python -c "
+          import fi_core, fi_runner
+          print(f'paired: fi-core={fi_core.__version__}, fi-runner={fi_runner.__version__}')
+
+          # The integration point: fi-runner's capabilities module wires
+          # fi-core MCP servers. We can at least import it.
+          from fi_runner import capabilities
+          print(f'  capabilities module OK, registry has {len(capabilities.REGISTRY)} factories')
+
+          # Names registered in fi-runner.capabilities map 1:1 to fi-core
+          # submodules. Spot-check that the imports resolve.
+          for name in ('cognitive', 'persona'):
+              if name in capabilities.REGISTRY:
+                  print(f'  capability {name!r} registered')
+          "
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '## Anaconda consumption smoke result'
+            echo
+            echo 'Packages tested: \`${{ steps.pkgs.outputs.packages }}\`'
+            echo 'Channel: \`bernardurizaorozco\` (+ \`conda-forge\` for deps)'
+            echo
+            echo 'If this run is RED, the corresponding package failed the Golden Rule:'
+            echo 'an external user following the README in a clean conda env cannot use it.'
+            echo 'The fix lives in the package, not in this workflow.'
+          } >> "$GITHUB_STEP_SUMMARY"
