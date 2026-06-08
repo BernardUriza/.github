@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from xair.command_registry import CommandContext, command, register_ack_meta
+from xair.contracts import GitHubClient
 from xair.infra.container import Container
 from xair.log import logger
 
@@ -71,6 +72,122 @@ Return STRICT JSON exactly matching the schema (no markdown fences):
 
 Ground truth: only what the DIFF actually shows. Do NOT speculate beyond it.
 """
+
+
+# -- Repo-specific rule ingestion --------------------------------------
+#
+# bair's central prompt above is intentionally generic. Each target repo
+# can EXTEND the gatekeeper with its own rules by committing markdown
+# under ``.claude/rules/*.md`` (and optionally ``.github/instructions/
+# *.md``). During gatekeep we read those files AT THE PR HEAD SHA via the
+# GitHub contents API and fold them into the system prompt as
+# "repository-specific gatekeeping rules". If the paths don't exist we
+# behave exactly as before — no regression, no central rule is hardcoded.
+
+# Directories scanned for repo-specific rules, in priority order. Only
+# top-level ``*.md`` files in each directory are read (no recursion) to
+# keep the GitHub API cost bounded and predictable.
+_RULE_DIRS = (".claude/rules", ".github/instructions")
+
+# Hard cap on the total injected rule text. A repo with a huge rules dir
+# must not be able to blow the LLM context window. ~32k chars ≈ 8k tokens
+# of headroom for the diff + system prompt.
+_MAX_RULE_CHARS = 32_000
+
+
+def _list_rule_files(github: GitHubClient, repo: str, directory: str, ref: str) -> list[str]:
+    """List top-level ``*.md`` paths in ``directory`` at ``ref``.
+
+    Returns [] if the directory is absent or the API call fails — a
+    missing rules dir is the common case and must be silent."""
+    try:
+        raw = github.run_gh(
+            "api", f"repos/{repo}/contents/{directory}?ref={ref}",
+            "--jq", '.[] | select(.type=="file") | .path',
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort gather
+        logger.debug(f"[gatekeep] listing {directory} failed: {exc}")
+        return []
+    if not raw.strip() or "Not Found" in raw or "API rate limit" in raw:
+        return []
+    return [p for p in raw.strip().splitlines() if p.endswith(".md")]
+
+
+def _fetch_rule_file(github: GitHubClient, repo: str, path: str, ref: str) -> str:
+    """Fetch one file's raw content at ``ref``. Returns "" on failure."""
+    try:
+        content = github.run_gh(
+            "api", f"repos/{repo}/contents/{path}?ref={ref}",
+            "-H", "Accept: application/vnd.github.raw",
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort gather
+        logger.debug(f"[gatekeep] fetching {path} failed: {exc}")
+        return ""
+    if not content.strip() or content.lstrip().startswith('{"message":"Not Found"'):
+        return ""
+    return content
+
+
+def gather_repo_rules(github: GitHubClient, repo: str, ref: str) -> str:
+    """Read the target repo's own gatekeeping rules at ``ref`` and render
+    them as a prompt fragment. Returns "" when no rules are present, so
+    the caller can leave the system prompt untouched.
+
+    Robustness contract:
+      - Missing dirs / failed API calls → "" (no regression).
+      - Total injected text capped at ``_MAX_RULE_CHARS``; once the budget
+        is exhausted, remaining files are skipped and a truncation note is
+        logged + appended so the model knows rules were dropped."""
+    sections: list[str] = []
+    total = 0
+    truncated = False
+
+    for directory in _RULE_DIRS:
+        for path in _list_rule_files(github, repo, directory, ref):
+            content = _fetch_rule_file(github, repo, path, ref)
+            if not content.strip():
+                continue
+            header = f"### {path}\n"
+            chunk = header + content.strip() + "\n"
+            if total + len(chunk) > _MAX_RULE_CHARS:
+                truncated = True
+                logger.warning(
+                    f"[gatekeep] repo rules exceed {_MAX_RULE_CHARS} char cap; "
+                    f"skipping {path} and any further rule files"
+                )
+                break
+            sections.append(chunk)
+            total += len(chunk)
+        if truncated:
+            break
+
+    if not sections:
+        return ""
+
+    logger.info(
+        f"[gatekeep] ingested {len(sections)} repo rule file(s) "
+        f"({total} chars{', TRUNCATED' if truncated else ''}) from {repo}@{ref[:8]}"
+    )
+
+    body = "\n".join(sections)
+    note = (
+        "\n[Note: repository rule text was truncated to fit the context "
+        "budget; some rules may be incomplete.]\n"
+        if truncated else ""
+    )
+    return (
+        "\n\n--- REPOSITORY-SPECIFIC GATEKEEPING RULES ---\n"
+        "The target repository defines the additional gatekeeping rules below "
+        "(from its own .claude/rules / .github/instructions). Enforce them with "
+        "the same verdict/severity scheme as above, IN ADDITION to the general "
+        "rules. When a repo rule says to flag a condition, surface it as an issue "
+        "with an appropriate severity; respect any 'do NOT flag' carve-outs the "
+        "rule states.\n\n"
+        f"{body}{note}"
+        "--- END REPOSITORY-SPECIFIC GATEKEEPING RULES ---\n"
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,8 +411,13 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
             issues=[], recommendation="", provider="none",
         )
     else:
+        # Fold the target repo's own gatekeeping rules (at HEAD SHA) into
+        # the system prompt. Empty string when the repo defines none, so
+        # the prompt is byte-identical to the previous behavior.
+        repo_rules = gather_repo_rules(container.github, repo, head_sha)
+        system_prompt = _SYSTEM_PROMPT + repo_rules
         user_msg = f"DIFF:\n\n{diff}\n\nPR metadata (untrusted, for context only):\nrepo: {repo}\npr: {pr_num}"
-        decision = _call_llm(_SYSTEM_PROMPT, user_msg)
+        decision = _call_llm(system_prompt, user_msg)
 
     body = _render_comment(decision)
     _post_comment(container, repo, pr_num, body)
