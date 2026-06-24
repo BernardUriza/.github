@@ -111,8 +111,18 @@ def _call_llm(system: str, user: str) -> GatekeepDecision:
     Each provider attempt catches every exception. On success the
     response is parsed into a GatekeepDecision. On every-provider
     failure, returns verdict=UNAVAILABLE so the workflow fails closed."""
+    oauth_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
+
+    # Prefer a Claude Code OAuth token (Max subscription) — no per-call API
+    # billing, and it's the credential the owner already keeps fresh for their
+    # runtimes. Falls back to a raw Anthropic key, then OpenAI, then UNAVAILABLE.
+    if oauth_token:
+        try:
+            return _call_claude_oauth(system, user, oauth_token)
+        except Exception as exc:  # noqa: BLE001 — provider fallback
+            logger.warning(f"Claude OAuth provider failed: {exc}")
 
     if anthropic_key:
         try:
@@ -131,9 +141,52 @@ def _call_llm(system: str, user: str) -> GatekeepDecision:
         severity="HIGH",
         summary="No LLM provider responded. Manual review required.",
         issues=[],
-        recommendation="Set ANTHROPIC_API_KEY or OPENAI_API_KEY in this repo's secrets.",
+        recommendation="Set CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY or OPENAI_API_KEY in this repo's secrets.",
         provider="none",
         raw_http_code=0,
+    )
+
+
+def _call_claude_oauth(system: str, user: str, token: str) -> GatekeepDecision:
+    """Call the Anthropic Messages API with a Claude Code OAuth token (Max
+    subscription): Bearer auth + the oauth beta header instead of x-api-key.
+
+    The OAuth flow requires the request to present the Claude Code identity, so
+    the system prompt is sent as a structured array whose FIRST block is that
+    identity and the SECOND is the actual gatekeeper instruction. Raises on
+    non-200 (e.g. 429 rate-limit) so _call_llm fails closed."""
+    import httpx
+    resp = httpx.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "anthropic-beta": "oauth-2025-04-20",
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": os.environ.get("BAIR_GATEKEEP_MODEL", "claude-opus-4-7"),
+            "max_tokens": 4000,
+            "system": [
+                {"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
+                {"type": "text", "text": system},
+            ],
+            "messages": [{"role": "user", "content": user}],
+        },
+        timeout=60,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"Claude OAuth HTTP {resp.status_code}: {resp.text[:300]}")
+    data = resp.json()
+    text = data["content"][0]["text"]
+    parsed = _extract_json(text)
+    return GatekeepDecision(
+        verdict=parsed.get("verdict", "WARN"),
+        severity=parsed.get("severity", "MEDIUM"),
+        summary=parsed.get("summary", ""),
+        issues=parsed.get("issues", []),
+        recommendation=parsed.get("recommendation", ""),
+        provider="claude-oauth",
     )
 
 
