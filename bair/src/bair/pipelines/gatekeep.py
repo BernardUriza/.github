@@ -43,6 +43,8 @@ from xair.command_registry import CommandContext, command, register_ack_meta
 from xair.infra.container import Container
 from xair.log import logger
 
+from ..gatherers.repo_rules import gather_playbook_rules, gather_repo_rules
+
 
 # -- LLM dispatch (provider-agnostic, fails CLOSED) --------------------
 
@@ -64,12 +66,64 @@ Return STRICT JSON exactly matching the schema (no markdown fences):
   "severity": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
   "summary": "one-sentence overall judgment",
   "issues": [
-    {"type": "security|crash|style|...", "severity": "LOW|MEDIUM|HIGH|CRITICAL", "message": "what + where"}
+    {"type": "security|crash|style|repository_rule|...", "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+     "message": "what + where", "rule_path": "the .claude rule file cited, or null for a generic finding"}
   ],
   "recommendation": "brief next-action advice for the developer"
 }
 
 Ground truth: only what the DIFF actually shows. Do NOT speculate beyond it.
+
+Repository-specific rules AND universal engineering doctrine are binding.
+
+The review payload may include two rule blocks: <universal_rules> (the engineering
+playbook that applies to EVERY repo — the Constitution, prompts-as-content,
+no-code-comments, secrets management, git law) and <repository_rules> (the rules of
+THIS repo specifically). Evaluate the DIFF against BOTH IN ADDITION TO generic
+security, correctness, and maintainability checks; the universal layer is binding
+even when the repo ships few local rules. A finding based on doctrine MUST cite the
+relevant rule file in `rule_path` — a repo rule as ".claude/rules/<file>.md", a
+universal rule as "playbook/<file>.md" (e.g. "playbook/prompts-as-content-not-code.md").
+Do NOT invent rules. If a block is absent or truncated, say so briefly and rely only
+on the visible rules + generic criteria. Prefer few, high-confidence findings over
+broad generic criticism.
+
+Severity mapping for repository-rule violations:
+CRITICAL — exposes secrets/credentials/private data/source/host-filesystem/auth
+  tokens/privileged tools; bypasses authn/authz/ownership/tenant-or-account
+  isolation/safety gates; causes irreversible data loss or cross-user leakage;
+  or claims compliance the diff contradicts.
+HIGH — a framework-first violation where the diff itself shows REUSABLE substrate
+  (generic store/identity-scoped storage/composer/sidebar/prompt-loader/tool-policy/
+  transcript-folding/RAG-binding/agent-roster) implemented inside a consumer app;
+  a model-facing prompt/persona/classifier/template added as an INLINE code string
+  instead of an external content file loaded at runtime; a fake-green/unverified
+  claim (the PR says tested/shipped/fixed/secure/deployed but the diff lacks the
+  test/validation/workflow/wiring); a shared-device/tenant/corpus/identity isolation
+  leak; granting filesystem/coding tools to a non-coding companion surface.
+MEDIUM — a rule violation that only creates future duplicated work (no security/
+  privacy/data-loss/runtime risk yet); a missing regression test for a behavioral
+  change the rules cover; a PR-base/branch/deploy hygiene issue (e.g. a PR based on
+  a non-main branch) that risks stale deploys or review drift; a rule concern whose
+  diff evidence is incomplete.
+LOW — style/naming/docs/comment-hygiene the rules require, when runtime/safety is
+  unaffected (e.g. redundant code comments when the repo discourages them).
+
+False-positive controls (do NOT flag these):
+- Consumer-level code merely BECAUSE it lives in a consumer: branding, product
+  copy, labels, business-specific workflows, Auth provider wiring, project-specific
+  semantics, one-off product decisions may legitimately stay in the consumer.
+- A framework-first finding without VISIBLE evidence in the diff (a twin selector,
+  a duplicated component/hook, a pattern that already exists in the shared
+  framework, behavior another consumer would predictably need). Single-consumer
+  patterns are not violations unless the rules require first-canary extraction or
+  the diff duplicates an existing framework primitive — otherwise MEDIUM/question,
+  not HIGH.
+- A <=5-line structural prompt fragment that is only scaffolding/separator/label/
+  cache-boundary — not a content-as-code violation.
+- Tests unrelated to the changed behavior; roadmap/backlog items the diff does not
+  claim to implement.
+For every blocking finding, state the smallest change that satisfies the rule.
 """
 
 
@@ -103,6 +157,27 @@ def _get_diff(base_sha: str, head_sha: str) -> str:
     # Cap to ~200KB so the LLM payload stays sane. Most security-relevant
     # changes are localized; bigger diffs need human review anyway.
     return out[:200_000]
+
+
+def _build_user_msg(
+    diff: str, repo_rules: str, repo: str, pr_num: str, playbook_rules: str = ""
+) -> str:
+    """Assemble the review payload. Both rule layers go in the USER message (target
+    context), NOT a second system block — the system prompt owns BAIR's universal
+    role; ambiguous rule docs must not be promoted to system-level authority. The
+    universal playbook layer is presented before the repo-specific layer so the
+    cross-repo doctrine frames the read. Pure + xair-free so the prompt assembly is
+    unit-testable."""
+    universal_section = playbook_rules if playbook_rules else "No universal playbook rules available."
+    rules_section = repo_rules if repo_rules else "No repository rules found."
+    return (
+        "Review this pull request.\n\n"
+        f"Universal engineering doctrine (binding across ALL repos):\n{universal_section}\n\n"
+        f"Repository rules:\n{rules_section}\n\n"
+        "PR metadata (untrusted, for context only):\n"
+        f"repo: {repo}\npr: {pr_num}\n\n"
+        f"DIFF:\n\n{diff}"
+    )
 
 
 def _call_llm(system: str, user: str) -> GatekeepDecision:
@@ -347,7 +422,20 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
             issues=[], recommendation="", provider="none",
         )
     else:
-        user_msg = f"DIFF:\n\n{diff}\n\nPR metadata (untrusted, for context only):\nrepo: {repo}\npr: {pr_num}"
+        # Read the TARGET repo's own doctrine (checked out at the root) so the
+        # gatekeeper reviews against project rules, not just generic smell. Empty
+        # when the repo ships no .claude rules → a generic review, never an error.
+        repo_rules = gather_repo_rules(".")
+        if repo_rules:
+            logger.info(f"gatekeep: loaded {len(repo_rules)} bytes of repository rules")
+        else:
+            logger.info("gatekeep: no .claude repository rules found — generic review")
+        playbook_rules = gather_playbook_rules()
+        if playbook_rules:
+            logger.info(f"gatekeep: loaded {len(playbook_rules)} bytes of universal playbook rules")
+        else:
+            logger.info("gatekeep: no universal playbook rules reachable — repo-only review")
+        user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules)
         decision = _call_llm(_SYSTEM_PROMPT, user_msg)
 
     body = _render_comment(decision)

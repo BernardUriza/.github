@@ -46,6 +46,16 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.ref || github.event.pull_request.head.sha }}
 
+      # The runner has no ~/.claude/rules/playbook — check the universal doctrine
+      # out into _bair_playbook so the gatekeeper can enforce cross-repo law. The
+      # gatherer reads the curated subset from BAIR_PLAYBOOK_RULES_DIR (set below).
+      - name: Checkout universal engineering playbook
+        uses: actions/checkout@v4
+        with:
+          repository: BernardUriza/engineering-playbook
+          ref: main
+          path: _bair_playbook
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
@@ -69,6 +79,7 @@ jobs:
           PR_NUM: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BAIR_PLAYBOOK_RULES_DIR: ${{ github.workspace }}/_bair_playbook/rules
         # NOTE: exit code from `python -m bair gatekeep` IS the gate.
         # On BLOCK/UNAVAILABLE the pipeline exits 1 → this step fails →
         # job status RED → calling workflow's required check blocks merge.
