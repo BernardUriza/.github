@@ -8,6 +8,8 @@ and the assembled payload carries the rules alongside the diff.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from bair.gatherers.repo_rules import (
@@ -19,7 +21,7 @@ from bair.gatherers.repo_rules import (
 )
 
 
-def _mk(root, rel: str, body: str) -> None:
+def _mk(root: Path, rel: str, body: str) -> None:
     p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(body, encoding="utf-8")
@@ -70,7 +72,7 @@ def test_empty_claude_dir_returns_empty(tmp_path) -> None:
 # -- universal playbook layer ------------------------------------------------
 
 
-def _mk_playbook(root) -> object:
+def _mk_playbook(root: Path) -> Path:
     rules = root / "playbook" / "rules"
     rules.mkdir(parents=True, exist_ok=True)
     for name in _CURATED_PLAYBOOK_RULES:
