@@ -43,7 +43,7 @@ from xair.command_registry import CommandContext, command, register_ack_meta
 from xair.infra.container import Container
 from xair.log import logger
 
-from ..gatherers.repo_rules import gather_repo_rules
+from ..gatherers.repo_rules import gather_playbook_rules, gather_repo_rules
 
 
 # -- LLM dispatch (provider-agnostic, fails CLOSED) --------------------
@@ -74,15 +74,19 @@ Return STRICT JSON exactly matching the schema (no markdown fences):
 
 Ground truth: only what the DIFF actually shows. Do NOT speculate beyond it.
 
-Repository-specific rules are binding.
+Repository-specific rules AND universal engineering doctrine are binding.
 
-When the review payload includes a <repository_rules> block, evaluate the DIFF
-against those rules IN ADDITION TO generic security, correctness, and
-maintainability checks. A finding based on repository doctrine MUST cite the
-relevant rule file in `rule_path` (e.g. ".claude/rules/prompts-as-content-not-code.md").
-Do NOT invent repository rules. If the rules block is absent or truncated, say so
-briefly and rely only on the visible rules + generic criteria. Prefer few,
-high-confidence findings over broad generic criticism.
+The review payload may include two rule blocks: <universal_rules> (the engineering
+playbook that applies to EVERY repo — the Constitution, prompts-as-content,
+no-code-comments, secrets management, git law) and <repository_rules> (the rules of
+THIS repo specifically). Evaluate the DIFF against BOTH IN ADDITION TO generic
+security, correctness, and maintainability checks; the universal layer is binding
+even when the repo ships few local rules. A finding based on doctrine MUST cite the
+relevant rule file in `rule_path` — a repo rule as ".claude/rules/<file>.md", a
+universal rule as "playbook/<file>.md" (e.g. "playbook/prompts-as-content-not-code.md").
+Do NOT invent rules. If a block is absent or truncated, say so briefly and rely only
+on the visible rules + generic criteria. Prefer few, high-confidence findings over
+broad generic criticism.
 
 Severity mapping for repository-rule violations:
 CRITICAL — exposes secrets/credentials/private data/source/host-filesystem/auth
@@ -155,14 +159,20 @@ def _get_diff(base_sha: str, head_sha: str) -> str:
     return out[:200_000]
 
 
-def _build_user_msg(diff: str, repo_rules: str, repo: str, pr_num: str) -> str:
-    """Assemble the review payload. The repo rules go in the USER message (target
+def _build_user_msg(
+    diff: str, repo_rules: str, repo: str, pr_num: str, playbook_rules: str = ""
+) -> str:
+    """Assemble the review payload. Both rule layers go in the USER message (target
     context), NOT a second system block — the system prompt owns BAIR's universal
-    role; an ambiguous repo doc must not be promoted to system-level authority.
-    Pure + xair-free so the prompt assembly is unit-testable."""
+    role; ambiguous rule docs must not be promoted to system-level authority. The
+    universal playbook layer is presented before the repo-specific layer so the
+    cross-repo doctrine frames the read. Pure + xair-free so the prompt assembly is
+    unit-testable."""
+    universal_section = playbook_rules if playbook_rules else "No universal playbook rules available."
     rules_section = repo_rules if repo_rules else "No repository rules found."
     return (
         "Review this pull request.\n\n"
+        f"Universal engineering doctrine (binding across ALL repos):\n{universal_section}\n\n"
         f"Repository rules:\n{rules_section}\n\n"
         "PR metadata (untrusted, for context only):\n"
         f"repo: {repo}\npr: {pr_num}\n\n"
@@ -420,7 +430,12 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
             logger.info(f"gatekeep: loaded {len(repo_rules)} bytes of repository rules")
         else:
             logger.info("gatekeep: no .claude repository rules found — generic review")
-        user_msg = _build_user_msg(diff, repo_rules, repo, pr_num)
+        playbook_rules = gather_playbook_rules()
+        if playbook_rules:
+            logger.info(f"gatekeep: loaded {len(playbook_rules)} bytes of universal playbook rules")
+        else:
+            logger.info("gatekeep: no universal playbook rules reachable — repo-only review")
+        user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules)
         decision = _call_llm(_SYSTEM_PROMPT, user_msg)
 
     body = _render_comment(decision)
