@@ -142,36 +142,67 @@ def _call_llm(system: str, user: str) -> GatekeepDecision:
     )
 
 
+_RETRYABLE_STATUSES = {429, 500, 502, 503, 529}
+_OAUTH_MAX_ATTEMPTS = 4
+_OAUTH_BACKOFF_BASE_S = 60
+_OAUTH_RETRY_AFTER_CAP_S = 300
+
+
 def _call_claude_oauth(system: str, user: str, token: str) -> GatekeepDecision:
     """Call the Anthropic Messages API with a Claude Code OAuth token (Max
     subscription): Bearer auth + the oauth beta header instead of x-api-key.
 
     The OAuth flow requires the request to present the Claude Code identity, so
     the system prompt is sent as a structured array whose FIRST block is that
-    identity and the SECOND is the actual gatekeeper instruction. Raises on
-    non-200 (e.g. 429 rate-limit) so _call_llm fails closed."""
+    identity and the SECOND is the actual gatekeeper instruction.
+
+    The Max account is a POOL shared with the owner's live sessions and
+    runtimes, so a 429 here usually means transient contention, not a dead
+    credential — and a CI batch job can afford to wait it out. Retries
+    429/5xx/529 with exponential backoff + jitter, honoring ``retry-after``
+    when sane. Non-retryable statuses (401, 403, 400) raise immediately so
+    _call_llm fails closed without burning runner minutes."""
     import httpx
-    resp = httpx.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "anthropic-beta": "oauth-2025-04-20",
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": os.environ.get("BAIR_GATEKEEP_MODEL", "claude-opus-4-7"),
-            "max_tokens": 4000,
-            "system": [
-                {"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
-                {"type": "text", "text": system},
-            ],
-            "messages": [{"role": "user", "content": user}],
-        },
-        timeout=60,
-    )
-    if resp.status_code != 200:
-        raise RuntimeError(f"Claude OAuth HTTP {resp.status_code}: {resp.text[:300]}")
+    import random
+    import time
+
+    resp = None
+    for attempt in range(_OAUTH_MAX_ATTEMPTS):
+        resp = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "anthropic-beta": "oauth-2025-04-20",
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": os.environ.get("BAIR_GATEKEEP_MODEL", "claude-opus-4-7"),
+                "max_tokens": 4000,
+                "system": [
+                    {"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
+                    {"type": "text", "text": system},
+                ],
+                "messages": [{"role": "user", "content": user}],
+            },
+            timeout=60,
+        )
+        if resp.status_code == 200:
+            break
+        if resp.status_code not in _RETRYABLE_STATUSES or attempt == _OAUTH_MAX_ATTEMPTS - 1:
+            raise RuntimeError(f"Claude OAuth HTTP {resp.status_code}: {resp.text[:300]}")
+        retry_after = resp.headers.get("retry-after", "")
+        if retry_after.isdigit() and int(retry_after) <= _OAUTH_RETRY_AFTER_CAP_S:
+            wait = int(retry_after)
+        else:
+            wait = random.uniform(0, min(_OAUTH_BACKOFF_BASE_S * (2 ** attempt), _OAUTH_RETRY_AFTER_CAP_S))
+        logger.warning(
+            f"Claude OAuth HTTP {resp.status_code} (attempt {attempt + 1}/{_OAUTH_MAX_ATTEMPTS}), "
+            f"retrying in {wait:.0f}s"
+        )
+        time.sleep(wait)
+    if resp is None or resp.status_code != 200:
+        raise RuntimeError("Claude OAuth: no successful response")
     data = resp.json()
     text = data["content"][0]["text"]
     parsed = _extract_json(text)
