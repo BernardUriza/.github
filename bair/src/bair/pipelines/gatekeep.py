@@ -9,10 +9,16 @@ all, because the green checkmark misled human review.
 
 This pipeline fixes the failure modes the broken Gatekeeper revealed:
 
-  - **Fail CLOSED, not OPEN.** If the LLM call returns non-200, the
-    pipeline EMITS a comment ("Gatekeeper unavailable — manual review
-    required") and exits with code 1. The status check goes RED, the
-    PR cannot be merged without explicit override.
+  - **No quota → no power (2026-09-08).** If every provider fails (429
+    on the shared Max pool, a dead key, no key at all) the pipeline
+    ABSTAINS: it posts a loud comment naming each provider's failure
+    and exits 0. A reviewer with no model has no opinion, and blocking
+    the merge on infrastructure is not a review. The one thing that
+    still exits 1 is a real BLOCK verdict — and a miswired caller
+    (missing REPO/PR_NUM/SHAs), which is a bug, not a quota.
+    What made the old fail-open dangerous was the SILENCE (a green
+    check + no comment); the abstention is explicit, so it cannot be
+    mistaken for approval.
   - **Multi-provider fallback.** Tries Anthropic first (cheaper +
     reliable), then OpenAI (Azure or direct), then a stub that always
     posts the unavailability comment. The user provides whichever key
@@ -100,15 +106,36 @@ def _build_user_msg(
     )
 
 
-def _call_llm(system: str, user: str) -> GatekeepDecision:
-    """Try Anthropic, fall back to OpenAI, fall back to UNAVAILABLE.
+def _abstain(failures: list[str]) -> GatekeepDecision:
+    """The decision when no provider answered: an explicit abstention that
+    names every failure, never a verdict on the diff."""
+    why = "; ".join(failures) if failures else "no LLM credential configured"
+    return GatekeepDecision(
+        verdict="UNAVAILABLE",
+        severity="NONE",
+        summary=(
+            "No LLM provider responded, so BAIR has no opinion on this diff and "
+            f"does NOT block the merge. Reasons: {why}."
+        ),
+        issues=[],
+        recommendation=(
+            "Review by hand, or re-run this job once the provider recovers "
+            "(a 429 on the Max pool clears when its 5-hour window resets)."
+        ),
+        provider="none",
+        raw_http_code=0,
+    )
 
-    Each provider attempt catches every exception. On success the
-    response is parsed into a GatekeepDecision. On every-provider
-    failure, returns verdict=UNAVAILABLE so the workflow fails closed."""
+
+def _call_llm(system: str, user: str) -> GatekeepDecision:
+    """Try Claude OAuth, then Anthropic, then OpenAI; abstain when all fail.
+
+    Each provider attempt catches every exception and records why it failed,
+    so the abstention comment carries the diagnosis instead of "none"."""
     oauth_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
+    failures: list[str] = []
 
     # Prefer a Claude Code OAuth token (Max subscription) — no per-call API
     # billing, and it's the credential the owner already keeps fresh for their
@@ -118,28 +145,28 @@ def _call_llm(system: str, user: str) -> GatekeepDecision:
             return _call_claude_oauth(system, user, oauth_token)
         except Exception as exc:  # noqa: BLE001 — provider fallback
             logger.warning(f"Claude OAuth provider failed: {exc}")
+            failures.append(f"claude-oauth: {_short(exc)}")
 
     if anthropic_key:
         try:
             return _call_anthropic(system, user, anthropic_key)
         except Exception as exc:  # noqa: BLE001 — provider fallback
             logger.warning(f"Anthropic provider failed: {exc}")
+            failures.append(f"anthropic: {_short(exc)}")
 
     if openai_key:
         try:
             return _call_openai(system, user, openai_key)
         except Exception as exc:  # noqa: BLE001 — provider fallback
             logger.warning(f"OpenAI provider failed: {exc}")
+            failures.append(f"openai: {_short(exc)}")
 
-    return GatekeepDecision(
-        verdict="UNAVAILABLE",
-        severity="HIGH",
-        summary="No LLM provider responded. Manual review required.",
-        issues=[],
-        recommendation="Set CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY or OPENAI_API_KEY in this repo's secrets.",
-        provider="none",
-        raw_http_code=0,
-    )
+    return _abstain(failures)
+
+
+def _short(exc: BaseException, limit: int = 160) -> str:
+    text = " ".join(str(exc).split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 _RETRYABLE_STATUSES = {429, 500, 502, 503, 529}
@@ -303,7 +330,7 @@ _VERDICT_HEADERS = {
     "APPROVE":     "## :white_check_mark: BAIR Gatekeeper: APPROVED",
     "WARN":        "## :warning: BAIR Gatekeeper: WARNING",
     "BLOCK":       "## :x: BAIR Gatekeeper: BLOCKED",
-    "UNAVAILABLE": "## :rotating_light: BAIR Gatekeeper: UNAVAILABLE",
+    "UNAVAILABLE": "## :zzz: BAIR Gatekeeper: ABSTAINED (no LLM provider — not blocking)",
 }
 
 
@@ -320,7 +347,10 @@ def _render_comment(d: GatekeepDecision) -> str:
             parts.append(f"- **[{sev}] {typ}** — {msg}")
     if d.recommendation:
         parts.append(f"\n### Recommendation\n{d.recommendation}")
-    parts.append("\n---\n*Posted by BAIR Gatekeeper. The original FI AI Gatekeeper failed-open silently; this one fails CLOSED on LLM error.*")
+    parts.append(
+        "\n---\n*Posted by BAIR Gatekeeper. Only a BLOCK verdict gates the merge; "
+        "when no LLM provider answers it abstains out loud instead of failing closed or approving in silence.*"
+    )
     return "\n".join(parts)
 
 
@@ -351,8 +381,8 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
 
     Reads PR_NUM, REPO, BASE_SHA, HEAD_SHA from env (or ctx for the
     first three). Fetches the diff, runs the LLM, posts a comment,
-    writes ``verdict`` to $GITHUB_OUTPUT, and exits non-zero on BLOCK or
-    UNAVAILABLE so the calling workflow's status check fails CLOSED."""
+    writes ``verdict`` to $GITHUB_OUTPUT, and exits non-zero only on BLOCK.
+    UNAVAILABLE (no provider) abstains: comment + ``abstained=true``, exit 0."""
     repo = ctx.repo or os.environ.get("REPO", "")
     pr_num = ctx.pr_num or os.environ.get("PR_NUM", "")
     base_sha = os.environ.get("BASE_SHA", "")
@@ -396,13 +426,19 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
     _set_output("severity", decision.severity)
     _set_output("provider", decision.provider)
     _set_output("executed", "true")
+    _set_output("abstained", "true" if decision.verdict == "UNAVAILABLE" else "false")
 
     logger.info(f"BAIR gatekeep verdict={decision.verdict} severity={decision.severity} provider={decision.provider}")
 
-    # Exit semantics: fail CLOSED on BLOCK and UNAVAILABLE.
-    if decision.verdict in {"BLOCK", "UNAVAILABLE"}:
-        sys.exit(1)
-    # WARN passes the gate but the comment surfaces the concern.
+    code = _exit_code(decision.verdict)
+    if code:
+        sys.exit(code)
+
+
+def _exit_code(verdict: str) -> int:
+    """Only BLOCK gates the merge. WARN passes with the concern in the comment;
+    UNAVAILABLE is an abstention, and a reviewer with no model has no veto."""
+    return 1 if verdict == "BLOCK" else 0
 
 
 # Optional ack appearance when the command is triggered via PR comment.

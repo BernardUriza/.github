@@ -7,10 +7,10 @@ name: BAIR Gatekeeper
 #     uses: BernardUriza/.github/.github/workflows/ai-gatekeep.yml@main
 #     secrets: inherit
 #
-# Crucial difference vs the original VAIR/FI gatekeeper: this workflow
-# fails CLOSED. Any LLM error (401, 429, 500, timeout) results in a
-# RED status check and a "Gatekeeper unavailable" comment on the PR,
-# instead of the silent green checkmark the broken one was producing.
+# Only a BLOCK verdict gates the merge. When no LLM provider answers
+# (429 on the Max pool, dead key, no key) BAIR ABSTAINS: a loud comment
+# naming each failure, `abstained=true`, exit 0 — never the silent green
+# checkmark the original gatekeeper produced, never a red for a quota.
 
 on:
   workflow_call:
@@ -81,8 +81,8 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BAIR_PLAYBOOK_RULES_DIR: ${{ github.workspace }}/_bair_playbook/rules
         # NOTE: exit code from `python -m bair gatekeep` IS the gate.
-        # On BLOCK/UNAVAILABLE the pipeline exits 1 → this step fails →
-        # job status RED → calling workflow's required check blocks merge.
+        # Only BLOCK exits 1 → step RED → required check blocks merge.
+        # UNAVAILABLE abstains (exit 0, `abstained=true`, loud comment).
         run: python -m bair gatekeep
 
       - name: Summarize verdict in job summary
@@ -97,6 +97,7 @@ jobs:
             echo "| severity | ${{ steps.gatekeep.outputs.severity || '?' }} |"
             echo "| provider | ${{ steps.gatekeep.outputs.provider || 'none' }} |"
             echo "| executed | ${{ steps.gatekeep.outputs.executed || 'false' }} |"
+            echo "| abstained | ${{ steps.gatekeep.outputs.abstained || 'false' }} |"
             echo
             echo "Full comment posted on PR. See the gatekeep step logs for diagnostic details."
           } >> "$GITHUB_STEP_SUMMARY"
