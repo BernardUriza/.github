@@ -1,6 +1,6 @@
 # 01 — The gate has never said no: prove BAIR can fail, then tune it
 
-Status: **In progress** 2026-09-25 — step 1 done except the clean control; step 2 (calibration) is next (from a review of server-bot PRs #93/#94/#95).
+Status: **In progress** 2026-09-25 — steps 1 and 2 done (done-criterion met); steps 3–5 open (from a review of server-bot PRs #93/#94/#95).
 
 ## The receipt
 
@@ -65,7 +65,6 @@ still comes back APPROVE — both, same prompt version.
   #92 regression, flagged the test deletion as fake-green, asked for the #general
   image probe. Caveat: the removed lines included the comment that explained the
   fix, so this is the easy case.
-
 - **server-bot#104** (2026-09-25, blind, closed): `all(_is_reference)` → `any(...)` in
   `_payload`, sold as "keep references when mixed with inline blocks". Real damage:
   (1) a mixed turn writes MBs of inline base64 into the Postgres row — what the
@@ -90,6 +89,28 @@ still comes back APPROVE — both, same prompt version.
   crash needed reading `_resumer`, which is outside the hunk. Feeding the bodies
   of functions that consume a changed return value (callers of `_payload`'s
   output) is a gatherer candidate alongside cross-PR context.
-- Still missing: a clean control PR on the same prompt version (the next real PR
-  to server-bot serves).
 
+
+## Step 2 — severity calibration (2026-09-25, BernardUriza/.github `780a4ac`)
+
+- `gatekeep_system.md`: a **data-plane** section. A change that can drop, duplicate,
+  corrupt or mis-persist data, store what must not be stored, or crash the reader
+  of a stored record is CRITICAL; so is deleting the test that guards it, and so
+  is a data-plane behavior change with no covering test. When the diff cannot show
+  the reader, that uncertainty is the finding (name the reader and the test).
+- `gatekeep.py::_floor_verdict`: the verdict never sits below its most severe issue
+  (CRITICAL → BLOCK, HIGH → at least WARN), whatever the model wrote. Tests in
+  `bair/tests/test_gatekeep_verdict_floor.py`.
+
+Same prompt version, all runs 23:09–23:14 UTC:
+
+| PR | Kind | Before | After |
+|----|------|--------|-------|
+| #104 | planted, blind, data plane | WARN/HIGH, green | **BLOCK/CRITICAL**, red; diagnosis now right (base64 lands in the row, `has_attachments=False` makes it look resumable) |
+| #101 | real, clean, not data plane | APPROVE/LOW | **APPROVE/LOW** |
+| #105 | real, clean, **data plane** (drops the base64 image path, tests updated) | — | **APPROVE/LOW**, no false positive |
+
+Done-criterion of this item met. Still not seen: the `_expired` `KeyError` on resume,
+which lives outside the hunk — that is step 4's job (feed the readers of changed
+data), together with cross-PR context. Watch the verdict distribution (step 5) for
+false positives on data-plane PRs over the next weeks before trusting the rule.
