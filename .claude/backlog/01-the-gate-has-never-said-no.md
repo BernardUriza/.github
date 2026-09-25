@@ -1,6 +1,6 @@
 # 01 — The gate has never said no: prove BAIR can fail, then tune it
 
-Status: **In progress** 2026-09-25 — step 1 partly done (see Receipts) (from a review of server-bot PRs #93/#94/#95).
+Status: **In progress** 2026-09-25 — step 1 done except the clean control; step 2 (calibration) is next (from a review of server-bot PRs #93/#94/#95).
 
 ## The receipt
 
@@ -53,9 +53,12 @@ still comes back APPROVE — both, same prompt version.
 
 ## Receipts
 
-- **server-bot#102** (2026-09-25): BLOCK/CRITICAL — but **does not count**. The diff
-  carries a `# DELIBERATE BUG` comment and the title/body announce the test; BAIR
+- **server-bot#102, v1** (2026-09-25 22:46): BLOCK/CRITICAL — **does not count**. The
+  diff carried a `# DELIBERATE BUG` comment and title/body announced the test; BAIR
   cited the label. A labeled defect proves nothing.
+- **server-bot#102, v2** (23:00, rewritten blind by another session, closed): `_payload`
+  stops persisting reference attachments (#50 undone). Verdict **WARN/HIGH**, check
+  green: mergeable. Diagnosis correct.
 - **server-bot#103** (2026-09-25, blind, closed): #92 fix reverted as a plausible
   refactor ("one request builder for submit and resume"), guarding test deleted,
   version bumped, no hint anywhere. Verdict **BLOCK/CRITICAL**, exit 1: named the
@@ -63,6 +66,30 @@ still comes back APPROVE — both, same prompt version.
   image probe. Caveat: the removed lines included the comment that explained the
   fix, so this is the easy case.
 
-**Still open for step 1:** (a) a blind defect with no explanatory trace in the diff
-(e.g. the #94 double-fold hole); (b) a clean PR on the same prompt version still
-comes back APPROVE. Only then close step 1 and move to calibration.
+- **server-bot#104** (2026-09-25, blind, closed): `all(_is_reference)` → `any(...)` in
+  `_payload`, sold as "keep references when mixed with inline blocks". Real damage:
+  (1) a mixed turn writes MBs of inline base64 into the Postgres row — what the
+  row was designed never to hold; (2) `has_attachments` goes False, so the job
+  looks resumable, and on resume `_expired` does `block["source"]["url"]` on the
+  inline block → `KeyError`, the resume crashes. No test covers the mixed case, so
+  CI stays green. Verdict **WARN/HIGH**, check **green → mergeable**. It spotted
+  that the semantics changed and that no test covers it, but got the direction
+  wrong ("inline blocks may be lost" — they are persisted, not lost), missed the
+  base64-in-the-row cost, and missed the resume crash entirely.
+
+## What step 1 proved
+
+- BAIR **can** say BLOCK — when the defect is spelled out in the diff (#103: the
+  removed comment explained the fix it reverted).
+- On the two subtle blind defects (#102 v2, #104) it lands on **WARN/HIGH, which
+  does not gate** — both would have merged. HIGH-severity correctness findings
+  that don't block are the calibration hole: step 2 is now evidence-driven, not a
+  hunch. Candidate rule: a HIGH on a data-plane path (persistence, resume,
+  attachments) with no covering test = BLOCK.
+- It reasons from the diff plus rules, not by tracing call sites: the `_expired`
+  crash needed reading `_resumer`, which is outside the hunk. Feeding the bodies
+  of functions that consume a changed return value (callers of `_payload`'s
+  output) is a gatherer candidate alongside cross-PR context.
+- Still missing: a clean control PR on the same prompt version (the next real PR
+  to server-bot serves).
+
