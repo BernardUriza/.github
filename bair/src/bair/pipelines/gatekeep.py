@@ -42,7 +42,7 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from xair.command_registry import CommandContext, command, register_ack_meta
@@ -417,7 +417,7 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
         else:
             logger.info("gatekeep: no universal playbook rules reachable — repo-only review")
         user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules)
-        decision = _call_llm(load_prompt("gatekeep_system"), user_msg)
+        decision = _floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg))
 
     body = _render_comment(decision)
     _post_comment(container, repo, pr_num, body)
@@ -433,6 +433,23 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
     code = _exit_code(decision.verdict)
     if code:
         sys.exit(code)
+
+
+_VERDICT_RANK = {"APPROVE": 0, "WARN": 1, "BLOCK": 2}
+_SEVERITY_FLOOR = {"HIGH": "WARN", "CRITICAL": "BLOCK"}
+
+
+def _floor_verdict(d: GatekeepDecision) -> GatekeepDecision:
+    """The verdict never sits below its most severe issue: a CRITICAL reported
+    under WARN would merge. UNAVAILABLE is an abstention and is left alone."""
+    if d.verdict not in _VERDICT_RANK:
+        return d
+    severities = [d.severity, *(str(i.get("severity", "")) for i in d.issues)]
+    floor = max((_SEVERITY_FLOOR.get(s.upper(), "APPROVE") for s in severities), key=_VERDICT_RANK.__getitem__)
+    if _VERDICT_RANK[floor] <= _VERDICT_RANK[d.verdict]:
+        return d
+    logger.warning(f"gatekeep: verdict {d.verdict} raised to {floor} to match the reported severity")
+    return replace(d, verdict=floor)
 
 
 def _exit_code(verdict: str) -> int:
