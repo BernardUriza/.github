@@ -27,7 +27,13 @@ Return STRICT JSON exactly matching the schema (no markdown fences):
   "recommendation": "brief next-action advice for the developer"
 }
 
-Ground truth: only what the DIFF actually shows. Do NOT speculate beyond it.
+Ground truth: what the DIFF shows, plus the <changed_code_context> block when
+present — the full post-change text of the files the diff touches and the call
+sites of the functions it touches. Use that context to follow the change into the
+code that reads its result: a crash, data loss or broken contract that the change
+causes in code outside the hunk is a finding of THIS change; cite the function
+and line. Do NOT review unchanged code for its own sake, and do not speculate
+beyond what the diff and that context show.
 
 Data-plane changes (a WARN here merges, so a real defect ships):
 The data plane is code that persists, replays, resumes, migrates, queues or

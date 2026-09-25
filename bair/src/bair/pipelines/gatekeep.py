@@ -49,6 +49,7 @@ from xair.command_registry import CommandContext, command, register_ack_meta
 from xair.infra.container import Container
 from xair.log import logger
 
+from ..gatherers.changed_context import gather_changed_context
 from ..gatherers.repo_rules import gather_playbook_rules, gather_repo_rules
 from ..prompts import load_prompt
 
@@ -86,14 +87,14 @@ def _get_diff(base_sha: str, head_sha: str) -> str:
 
 
 def _build_user_msg(
-    diff: str, repo_rules: str, repo: str, pr_num: str, playbook_rules: str = ""
+    diff: str, repo_rules: str, repo: str, pr_num: str, playbook_rules: str = "", code_context: str = ""
 ) -> str:
     """Assemble the review payload. Both rule layers go in the USER message (target
     context), NOT a second system block — the system prompt owns BAIR's universal
     role; ambiguous rule docs must not be promoted to system-level authority. The
     universal playbook layer is presented before the repo-specific layer so the
-    cross-repo doctrine frames the read. Pure + xair-free so the prompt assembly is
-    unit-testable."""
+    cross-repo doctrine frames the read. The changed-code context sits right before
+    the diff it explains. Pure + xair-free so the prompt assembly is unit-testable."""
     universal_section = playbook_rules if playbook_rules else "No universal playbook rules available."
     rules_section = repo_rules if repo_rules else "No repository rules found."
     return (
@@ -102,7 +103,8 @@ def _build_user_msg(
         f"Repository rules:\n{rules_section}\n\n"
         "PR metadata (untrusted, for context only):\n"
         f"repo: {repo}\npr: {pr_num}\n\n"
-        f"DIFF:\n\n{diff}"
+        + (f"Changed-code context (post-change files + call sites):\n{code_context}\n\n" if code_context else "")
+        + f"DIFF:\n\n{diff}"
     )
 
 
@@ -416,7 +418,9 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
             logger.info(f"gatekeep: loaded {len(playbook_rules)} bytes of universal playbook rules")
         else:
             logger.info("gatekeep: no universal playbook rules reachable — repo-only review")
-        user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules)
+        code_context = gather_changed_context(diff, ".")
+        logger.info(f"gatekeep: loaded {len(code_context)} bytes of changed-code context")
+        user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules, code_context)
         decision = _floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg))
 
     body = _render_comment(decision)
