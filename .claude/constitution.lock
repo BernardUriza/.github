@@ -15,7 +15,7 @@ surfaces = ["CLAUDE.md", ".claude/CLAUDE.md", ".claude/rules/**", ".claude/overr
 imports = [
   { from = ".claude/rules/pipeline-pattern.md", target = "command(\"<name>\")", sha256 = "0000000000000000000000000000000000000000000000000000000000000000" },
 ]
-surfaces_tree = "sha256:b3c56c98e5ce1785899199a8509eeb6a0218b8227b202264e920137c0df10d01"
+surfaces_tree = "sha256:b2729f704b8fce82b4a7bd5cce2d4de33bc863e2581411aaf733ac503d026d41"
 
 [hooks]
 entries = [
@@ -32,7 +32,7 @@ policy = ["repo", "bernard", "core"]
 methodology = []
 
 [lock]
-canonical_sha256 = "3830419b896fda24918de99c94a831046998e63f638aa1ece2795e6aaa488cb5"
+canonical_sha256 = "48cb84ed2d303e295f392b9fcd86cc4a504eeee036898cde5f144b0dad44bbfb"
 
 [[overlay]]
 id = "bernard"
