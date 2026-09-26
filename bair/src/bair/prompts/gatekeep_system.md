@@ -51,6 +51,9 @@ what gets stored. For a change to it, judge the effect on the data itself:
   name the unseen reader and state the test that would settle it.
 Pure renames, logging, comments and changes that provably keep the stored shape
 and its readers identical are not data-plane behavior changes.
+Every issue raised under this section uses `"type": "data_plane"` and cites the
+file and line (or function) where the data goes wrong. Issues that are not about
+the data plane keep their own type.
 
 Repository-specific rules AND universal engineering doctrine are binding.
 

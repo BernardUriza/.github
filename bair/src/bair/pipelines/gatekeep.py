@@ -65,6 +65,7 @@ class GatekeepDecision:
     recommendation: str
     provider: str  # which LLM responded
     raw_http_code: int = 200
+    would_block: bool = False  # a BLOCK held back by a shadow-mode rule
 
 
 def _get_diff(base_sha: str, head_sha: str) -> str:
@@ -340,6 +341,12 @@ def _render_comment(d: GatekeepDecision) -> str:
     """Markdown body for the PR comment."""
     header = _VERDICT_HEADERS.get(d.verdict, "## BAIR Gatekeeper")
     parts = [header, "", f"**Severity:** {d.severity}  ", f"**Provider:** `{d.provider}`", "", d.summary]
+    if d.would_block:
+        parts.append(
+            "\n> **Would block (shadow mode).** The data-plane rules report here but do not gate "
+            "the merge until BAIR's eval suite passes on held-out cases (BernardUriza/.github "
+            "backlog 01). Treat the CRITICAL findings below as a real stop sign."
+        )
     if d.issues:
         parts.append("\n### Issues\n")
         for i in d.issues:
@@ -421,7 +428,7 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
         code_context = gather_changed_context(diff, ".")
         logger.info(f"gatekeep: loaded {len(code_context)} bytes of changed-code context")
         user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules, code_context)
-        decision = _floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg))
+        decision = _shadow(_floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg)))
 
     body = _render_comment(decision)
     _post_comment(container, repo, pr_num, body)
@@ -431,6 +438,7 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
     _set_output("provider", decision.provider)
     _set_output("executed", "true")
     _set_output("abstained", "true" if decision.verdict == "UNAVAILABLE" else "false")
+    _set_output("would_block", "true" if decision.would_block else "false")
 
     logger.info(f"BAIR gatekeep verdict={decision.verdict} severity={decision.severity} provider={decision.provider}")
 
@@ -454,6 +462,25 @@ def _floor_verdict(d: GatekeepDecision) -> GatekeepDecision:
         return d
     logger.warning(f"gatekeep: verdict {d.verdict} raised to {floor} to match the reported severity")
     return replace(d, verdict=floor)
+
+
+# Issue types whose rules report but do not gate yet: they run in shadow until the
+# eval suite (backlog 01) shows no false BLOCKs on held-out clean PRs. Emptying
+# this set is the whole promotion step.
+_SHADOW_TYPES = frozenset({"data_plane"})
+
+
+def _shadow(d: GatekeepDecision) -> GatekeepDecision:
+    """A BLOCK that rests only on shadow-mode issues exits as WARN and says it
+    would have blocked. Any CRITICAL outside the shadow set still blocks, and a
+    BLOCK with no issues to attribute it to is left alone."""
+    if d.verdict != "BLOCK" or not d.issues:
+        return d
+    critical = [i for i in d.issues if str(i.get("severity", "")).upper() == "CRITICAL"]
+    if not critical or any(str(i.get("type", "")) not in _SHADOW_TYPES for i in critical):
+        return d
+    logger.warning("gatekeep: BLOCK held back to WARN — only shadow-mode (data_plane) issues are CRITICAL")
+    return replace(d, verdict="WARN", would_block=True)
 
 
 def _exit_code(verdict: str) -> int:

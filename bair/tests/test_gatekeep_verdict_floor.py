@@ -48,3 +48,41 @@ def test_the_floor_never_lowers_a_verdict():
 def test_an_abstention_is_left_alone():
     d = _decision("UNAVAILABLE", "NONE", "CRITICAL")
     assert gatekeep._floor_verdict(d) is d
+
+
+# -- Shadow mode: data-plane rules report "would block" but do not gate yet --------
+
+
+def _typed(verdict, *issues):
+    return gatekeep.GatekeepDecision(
+        verdict=verdict,
+        severity="CRITICAL",
+        summary="s",
+        issues=[{"type": t, "severity": s, "message": "m"} for t, s in issues],
+        recommendation="r",
+        provider="p",
+    )
+
+
+def test_a_block_resting_only_on_data_plane_is_held_back_and_says_so():
+    d = gatekeep._shadow(gatekeep._floor_verdict(_typed("WARN", ("data_plane", "CRITICAL"), ("testing", "HIGH"))))
+    assert (d.verdict, d.would_block) == ("WARN", True)
+    assert gatekeep._exit_code(d.verdict) == 0
+    assert "Would block (shadow mode)" in gatekeep._render_comment(d)
+
+
+def test_any_critical_outside_the_shadow_still_blocks():
+    d = gatekeep._shadow(_typed("BLOCK", ("data_plane", "CRITICAL"), ("security", "CRITICAL")))
+    assert (d.verdict, d.would_block) == ("BLOCK", False)
+
+
+def test_a_block_without_issues_is_not_attributed_to_the_shadow():
+    d = _typed("BLOCK")
+    assert gatekeep._shadow(d) is d
+
+
+def test_non_block_verdicts_pass_through_the_shadow():
+    for v in ("APPROVE", "WARN", "UNAVAILABLE"):
+        d = _typed(v, ("data_plane", "CRITICAL"))
+        assert gatekeep._shadow(d) is d
+    assert "Would block" not in gatekeep._render_comment(_typed("WARN", ("style", "LOW")))
