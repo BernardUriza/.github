@@ -11,14 +11,14 @@
 ## 🚀 Quick Start
 
 ```bash
-cd bair && pip install -e ".[test]"   # pulls xair from git main
+cd bair && pip install -e ".[test]"   # pulls xair, fi-core, fi-runner from git
 python -m pytest                      # offline, no LLM calls
-python -m bair gatekeep               # needs REPO, PR_NUM, BASE_SHA, HEAD_SHA + a Claude credential
+python -m bair gatekeep               # needs REPO, PR_NUM, BASE_SHA, HEAD_SHA + AIRE_BAIR_TOKEN
 ```
 
-Credentials, in the order the gate tries them: `CLAUDE_CODE_OAUTH_TOKEN` → `ANTHROPIC_API_KEY` → `OPENAI_API_KEY`. None answering → the gate **abstains out loud** (comment + exit 0), never blocks on infrastructure.
+**The model comes from AIRE**, Bernard's canonical source of LLM agents (`aire-server`, door at `https://gate.bernarduriza.com`). `_call_aire` uses AIRE's canonical client, `fi_runner.AIREBackend`: one `mode=complete` turn per review (no builtins, no agentic loop, no tools, throwaway session) in the casita `bair-gatekeep-{sha256(prompt)}` — named after the prompt so two prompt versions (the eval's A/B) never share a surface, the same pattern as server-bot's judge. AIRE holds the model credential, mirrors the transcript and accounts the spend; bair presents only **`AIRE_BAIR_TOKEN`**, its own consumer slot on the door (aire-server `bearer.py`), revocable without touching any other consumer. It lives in `~/.secrets/aire-bair-token.txt`, the droplet's `/etc/aire/env`, and the consumer repos' Actions secrets.
 
-**The subscription token only ever reaches the unmodified `claude` binary** (`_call_claude_code`), never the Messages API: Anthropic's terms reserve subscription OAuth for "ordinary use of Claude Code and other native Anthropic applications" ([legal-and-compliance](https://code.claude.com/docs/en/legal-and-compliance)). Consumer workflows install it (`curl -fsSL https://claude.ai/install.sh | bash -s stable`). bair runs it isolated — empty temp dir as cwd and HOME, minimal env (no `GH_TOKEN`), `--disallowedTools '*'`, one turn — because it would otherwise load hooks/MCP from the PR's checkout. The **eval suite uses an API key only** (a batch of ~150 reviews is not ordinary individual use).
+Credentials, in the order the gate tries them: `AIRE_BAIR_TOKEN` → `ANTHROPIC_API_KEY` → `OPENAI_API_KEY` (generic fallbacks for a consumer without AIRE). **bair never reads a subscription OAuth token**: Anthropic's terms reserve it for Claude Code and native apps ([legal-and-compliance](https://code.claude.com/docs/en/legal-and-compliance)), and AIRE owns that question for the ecosystem. None answering → the gate **abstains out loud** (comment + exit 0), never blocks on infrastructure.
 
 ---
 
@@ -56,7 +56,7 @@ The live gate and the eval suite call the **same** `review()` — change it and 
 
 Any change to the prompt, the model, the context or the verdict logic is decided by the eval suite, never by one PR:
 
-- **Where it runs:** server-bot branch `bair-eval`, workflow `.github/workflows/bair-eval.yml` (push to that branch triggers it; nothing touches main/CI/CD). Edit `EVAL_ARGS` there, push an empty commit, read the job summary + the `bair-eval-jsonl` artifact.
+- **Where it runs:** server-bot branch `bair-eval`, workflow `.github/workflows/bair-eval.yml` (push to that branch triggers it; nothing touches main/CI/CD). Edit `EVAL_ARGS` there, push an empty commit, read the job summary + the `bair-eval-jsonl` artifact. It reviews through AIRE like the live gate (`AIRE_BAIR_TOKEN`), with `--workers 1`: AIRE's droplet has two RAM slots and also serves the personas live.
 - **Protocol:** fix the decision rule BEFORE the run; decide on **held-out** only; dev may be read case by case, held-out only in aggregate (a held-out case you read moves to dev and gets replaced).
 - **Labels:** defects come from SZZ (blame the lines each `fix` commit changed) verified by hand; a "clean" case the gate flags gets audited — a real bug becomes a *latent* defect, not a false positive.
 - Full log, numbers and open decisions: `.claude/backlog/01-the-gate-has-never-said-no.md`.

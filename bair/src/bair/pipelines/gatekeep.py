@@ -127,13 +127,11 @@ def _claude_model(model: str | None) -> str:
 
 
 def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecision:
-    """Try AIRE, then the Claude Code binary (subscription), then an Anthropic API
-    key, then OpenAI; abstain when all fail.
+    """Try AIRE, then an Anthropic API key, then OpenAI; abstain when all fail.
 
     Each provider attempt catches every exception and records why it failed,
     so the abstention comment carries the diagnosis instead of "none"."""
     aire_token = os.environ.get(_AIRE_TOKEN_ENV, "")
-    oauth_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     failures: list[str] = []
@@ -148,17 +146,10 @@ def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecis
             logger.warning(f"AIRE provider failed: {exc}")
             failures.append(f"aire: {_short(exc)}")
 
-    # Then the owner's Claude subscription — through the unmodified `claude`
-    # binary, the path Anthropic's terms allow for a subscription OAuth token (see
-    # _call_claude_code). Falls back to an Anthropic API key, then OpenAI, then
-    # UNAVAILABLE.
-    if oauth_token:
-        try:
-            return _call_claude_code(system, user, oauth_token, model=model)
-        except Exception as exc:  # noqa: BLE001 — provider fallback
-            logger.warning(f"Claude Code provider failed: {exc}")
-            failures.append(f"claude-code: {_short(exc)}")
-
+    # A subscription OAuth token is never used here: Anthropic's terms reserve it
+    # for Claude Code and native apps (code.claude.com/docs/en/legal-and-compliance).
+    # AIRE owns that question for the whole ecosystem. The API-key and OpenAI
+    # paths remain as generic fallbacks for a consumer without AIRE.
     if anthropic_key:
         try:
             return _call_anthropic(system, user, anthropic_key, model=model)
@@ -224,75 +215,6 @@ def _call_aire(system: str, user: str, token: str, model: str | None = None) -> 
         )
     )
     return _normalize(_extract_json(result.text or ""), provider="aire")
-
-
-_CLI_TIMEOUT_S = 600  # the binary retries the API itself (429/5xx) inside this budget
-_CLI_PROMPT = (
-    "Review the pull request given as input. Answer with the JSON object your "
-    "instructions require, and nothing else."
-)
-# The only variables the binary sees: it must not reach the job's GitHub token or
-# any other secret, and it must not pick an API key over the subscription.
-_CLI_ENV_PASSTHROUGH = ("PATH", "LANG", "LC_ALL", "TMPDIR", "SSL_CERT_FILE", "SSL_CERT_DIR", "HTTPS_PROXY", "NO_PROXY")
-
-
-def _call_claude_code(system: str, user: str, token: str, model: str | None = None) -> GatekeepDecision:
-    """Review through the unmodified `claude` binary in print mode with the
-    owner's subscription token (``CLAUDE_CODE_OAUTH_TOKEN``).
-
-    Why the binary and not the Messages API: Anthropic's terms reserve
-    subscription OAuth for "ordinary use of Claude Code and other native
-    Anthropic applications" and ask developers building tools to use API keys
-    (code.claude.com/docs/en/legal-and-compliance). Until 2026-09-26 bair sent
-    the token straight to /v1/messages under a spoofed Claude Code identity; the
-    binary is the sanctioned path, and the one Anthropic documents for CI.
-
-    Isolation — the binary loads hooks, settings and MCP servers from its working
-    directory and HOME, and a PR controls the checkout. So it runs in an empty
-    temporary directory with an empty HOME, a minimal environment (no GH_TOKEN,
-    no API key), every tool disabled, one turn, and no session saved. The PR
-    reaches it only as stdin text."""
-    import shutil
-    import subprocess as sp
-    import tempfile
-
-    binary = shutil.which(os.environ.get("BAIR_CLAUDE_BIN", "claude"))
-    if not binary:
-        raise RuntimeError("claude CLI not found — the workflow must install Claude Code (claude.ai/install.sh)")
-    with tempfile.TemporaryDirectory(prefix="bair-claude-") as tmp:
-        system_file = os.path.join(tmp, "gatekeep_system.txt")
-        with open(system_file, "w", encoding="utf-8") as fh:
-            fh.write(system)
-        env = {k: os.environ[k] for k in _CLI_ENV_PASSTHROUGH if k in os.environ}
-        env.update(
-            HOME=tmp,
-            CLAUDE_CONFIG_DIR=os.path.join(tmp, ".claude"),
-            CLAUDE_CODE_OAUTH_TOKEN=token,
-            DISABLE_AUTOUPDATER="1",
-        )
-        proc = sp.run(
-            [
-                binary, "-p", _CLI_PROMPT,
-                "--output-format", "json",
-                "--system-prompt-file", system_file,
-                "--disallowedTools", "*",
-                "--max-turns", "1",
-                "--no-session-persistence",
-                "--model", _claude_model(model),
-            ],
-            input=user, cwd=tmp, env=env, capture_output=True, text=True, timeout=_CLI_TIMEOUT_S,
-        )
-    try:
-        data = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        detail = (proc.stderr or proc.stdout or "").strip()[:300]
-        raise RuntimeError(f"claude CLI exit {proc.returncode}, unreadable output: {detail}") from exc
-    if data.get("is_error") or data.get("subtype") != "success":
-        raise RuntimeError(
-            f"claude CLI {data.get('subtype')} (api status {data.get('api_error_status')}): "
-            f"{str(data.get('result', ''))[:300]}"
-        )
-    return _normalize(_extract_json(str(data.get("result", ""))), provider="claude-code")
 
 
 def _call_anthropic(system: str, user: str, key: str, model: str | None = None) -> GatekeepDecision:

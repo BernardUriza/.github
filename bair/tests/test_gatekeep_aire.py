@@ -87,3 +87,13 @@ def test_the_gate_url_is_configurable(aire, monkeypatch):
     monkeypatch.setenv("AIRE_GATE_URL", "https://staging.example")
     gatekeep._call_aire("s", "u", "tok")
     assert aire["backends"][0]["gate_url"] == "https://staging.example"
+
+
+def test_the_gate_never_touches_a_subscription_token():
+    """Anthropic reserves subscription OAuth for Claude Code and native apps; AIRE
+    owns that question for the ecosystem. bair must not read or forward one."""
+    from pathlib import Path
+
+    source = Path(gatekeep.__file__).read_text(encoding="utf-8")
+    assert 'os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"' not in source
+    assert "oauth-2025-04-20" not in source

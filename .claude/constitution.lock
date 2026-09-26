@@ -6,7 +6,7 @@ override = []
 [core]
 id = "agent-constitution"
 repo = "https://github.com/BernardUriza/agent-constitution.git"
-rev = "92d13b983fe2c9346a21144bfc4562d73d3c5259"
+rev = "2e9c857913a16ba845a91a96941b9825ed1450ed"
 tree = "sha256:417310deb9985f96b536d06f4f333278e6cf7218fda9176991a7e02b721e8952"
 
 [repo]
@@ -15,7 +15,7 @@ surfaces = ["CLAUDE.md", ".claude/CLAUDE.md", ".claude/rules/**", ".claude/overr
 imports = [
   { from = ".claude/rules/pipeline-pattern.md", target = "command(\"<name>\")", sha256 = "0000000000000000000000000000000000000000000000000000000000000000" },
 ]
-surfaces_tree = "sha256:7048cf9075e88c92688eadb556978a5074b63f78267f2a1b36233cc2b2d5613b"
+surfaces_tree = "sha256:43678c954e275fe84ece50fa05fc1cce97a5b45c27501862461c40040749faca"
 
 [hooks]
 entries = [
@@ -32,7 +32,7 @@ policy = ["repo", "bernard", "core"]
 methodology = []
 
 [lock]
-canonical_sha256 = "6fb12065ab1132dc121f58f8cb918a3e77ed0d26420293a54299159b81fb61d4"
+canonical_sha256 = "477fc9c2f7fd08c449f7603372c3f915794ef639a0bb4953edb501973685852e"
 
 [[overlay]]
 id = "bernard"

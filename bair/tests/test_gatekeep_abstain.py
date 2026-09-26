@@ -13,23 +13,23 @@ from bair.pipelines import gatekeep
 
 
 def test_no_provider_abstains_with_the_reasons(monkeypatch):
-    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "tok")
+    monkeypatch.setenv("AIRE_BAIR_TOKEN", "tok")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "key")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    def boom_claude_code(system, user, token, model=None):
-        raise RuntimeError("claude CLI error_during_execution (api status 429): rate limit")
+    def boom_aire(system, user, token, model=None):
+        raise RuntimeError("AIRE door 503: engine pool exhausted")
 
     def boom_anthropic(system, user, key, model=None):
         raise RuntimeError("Anthropic HTTP 401: API key is invalid.")
 
-    monkeypatch.setattr(gatekeep, "_call_claude_code", boom_claude_code)
+    monkeypatch.setattr(gatekeep, "_call_aire", boom_aire)
     monkeypatch.setattr(gatekeep, "_call_anthropic", boom_anthropic)
     d = gatekeep._call_llm("sys", "user")
     assert d.verdict == "UNAVAILABLE"
     assert d.provider == "none"
     assert "does NOT block" in d.summary
-    assert "claude-code: claude CLI error_during_execution (api status 429)" in d.summary
+    assert "aire: AIRE door 503: engine pool exhausted" in d.summary
     assert "anthropic: Anthropic HTTP 401" in d.summary
 
 
