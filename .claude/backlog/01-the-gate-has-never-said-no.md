@@ -1,6 +1,6 @@
 # 01 — The gate has never said no: prove BAIR can fail, then tune it
 
-Status: **In progress** 2026-09-25 — steps 1 and 2 done (done-criterion met); steps 3–5 open (from a review of server-bot PRs #93/#94/#95).
+Status: **In progress** 2026-09-26 — calibration and context shipped, data-plane rules in **shadow mode**; the eval suite (step 6) gates promotion (from a review of server-bot PRs #93/#94/#95).
 
 ## The receipt
 
@@ -110,7 +110,83 @@ Same prompt version, all runs 23:09–23:14 UTC:
 | #101 | real, clean, not data plane | APPROVE/LOW | **APPROVE/LOW** |
 | #105 | real, clean, **data plane** (drops the base64 image path, tests updated) | — | **APPROVE/LOW**, no false positive |
 
-Done-criterion of this item met. Still not seen: the `_expired` `KeyError` on resume,
-which lives outside the hunk — that is step 4's job (feed the readers of changed
-data), together with cross-PR context. Watch the verdict distribution (step 5) for
-false positives on data-plane PRs over the next weeks before trusting the rule.
+~~Done-criterion of this item met.~~ **Retracted 2026-09-26:** one run per case is not
+evidence. 1/1 and 2/2 have 95% Wilson lower bounds of ~21% and ~34% — compatible
+with a coin flip, and LLM verdicts flip between runs even at temperature 0. The
+done-criterion is replaced by step 6.
+
+## Step 4a — changed-code context (`f0669ce`)
+
+`bair/gatherers/changed_context.py` adds a `<changed_code_context>` block: full
+post-change text of every touched file plus `git grep -w` call sites of each changed
+function (the one ENCLOSING the changed line — git's hunk header names the def
+before the hunk). Reruns at 23:27 UTC: #101 and #105 still APPROVE/LOW, but each
+loaded **~80 KB, the full budget**. AACR-Bench (below) shows plain LLM calls get
+worse as raw context grows, while targeted slicing helps — so the next iteration is
+slicing (changed functions + callers' bodies + readers of the same data), measured
+against full-file context in the eval suite, not assumed.
+
+## Research verdict (2026-09-26, /histerical-search, 4 parallel investigators)
+
+- **Planting defects:** replaying real bug-introducing commits is the best-validated
+  method (Greptile); trivial synthetic mutants overstate ability up to 12× (F1 0.847
+  synthetic vs 0.066 real, arXiv 2606.15689); label leakage ("// Here is the bug") is
+  documented (arXiv 2606.29088) — exactly #102 v1. Detection drops ~15× from <10-line
+  to >150-line diffs: our planted defects were small and isolated, the easy case.
+- **Real accuracy:** independent recall 10–45%, precision single digits to ~40%
+  (AACR-Bench arXiv 2601.19494, CR-Bench arXiv 2603.11078); vendor figures do not
+  survive re-scoring (Greptile 82% → 45%). Nobody has studied out-of-hunk effects
+  specifically.
+- **Blocking gates:** no major vendor blocks by default — Anthropic Code Review's
+  check is always `neutral`, Bugbot/Copilot advisory; CodeRabbit blocks opt-in with
+  a graduated warning→error rollout and an override command. Anthropic's advice:
+  gate in your own CI, on top-severity findings only.
+- **Eval design:** binary labels, per-class rates (defects caught / clean falsely
+  blocked), K runs per case, paired old-vs-new comparison, a held-out set never used
+  for tuning, rerun on every prompt change (Anthropic docs + Miller arXiv 2411.00640,
+  OpenAI eval guide, Hamel Husain, Eugene Yan).
+
+## Step 2b — shadow mode (`aec1bb3`)
+
+Following the graduated-rollout practice: data-plane findings carry
+`"type": "data_plane"` with a file:line citation, and a BLOCK that rests only on
+them exits as **WARN with `would_block=true`** (comment banner + `$GITHUB_OUTPUT`).
+Any CRITICAL outside the shadow set still blocks. Promotion = emptying
+`_SHADOW_TYPES` in `gatekeep.py`, allowed only when step 6 passes.
+
+Live receipt (#104 rerun, 00:27 UTC, context + shadow): **WARN, severity CRITICAL,
+`would_block` banner, exit 0**. With the full file in view it now cites the module
+docstring's contract ("inline adjuntos no se persisten") and names `_resumer`
+skipping the `NotResumableError` guard for inline content — the out-of-hunk reader.
+It still does not name the `_expired` `KeyError` itself; one run, so no conclusion
+beyond "the plumbing works".
+
+## Step 6 — the eval suite (gates promotion out of shadow)
+
+1. **Cases:** 12 planted defects (distinct classes; prefer replays of real fix
+   commits; at least 3 buried in plausible multi-file diffs; at least 3 whose effect
+   lands outside the hunk) + 12 clean real PRs, including hard negatives (large
+   refactors, legitimate test deletions, dependency bumps, clean data-plane changes
+   like #105). Each defect proven by a hidden test or repro script. A leakage lint
+   rejects any diff/title/branch/commit containing bug/deliberate/planted/test-gate
+   wording. Ground truth lives outside the target repo.
+2. **Split:** 6+6 dev (may be read while editing the prompt), 6+6 held-out (only
+   aggregates are read; a held-out case used for tuning moves to dev and is replaced).
+3. **Runs:** 5 per case per prompt version, production settings; majority verdict.
+4. **Metrics:** defect recall (majority BLOCK or would_block), false-block rate,
+   flip rate, each with a Wilson 95% interval; paired discordant cases old vs new.
+5. **Pass (held-out):** 0 clean cases with majority BLOCK and none BLOCKed in >1/5
+   runs; ≥5/6 defects caught; no defect the previous version caught regresses
+   (#103-class must stay BLOCK); flip rate ≤2 cases.
+6. **Versioning:** results as JSONL keyed by sha256 of `gatekeep_system.md` + model
+   id; `@pytest.mark.eval` suite triggered when the prompt or gatekeep code changes;
+   a baseline file per prompt version.
+7. **Growth:** every real miss or false BLOCK in production becomes a labeled case.
+   12+12 is a regression tripwire, not a precision estimate (±10 points needs 50+
+   per class).
+
+Also open from the research: a logged override (`/bair override <reason>` or a
+maintainer-only label) before anything leaves shadow; consider 2-of-3 agreement
+before `exit 1` if the suite shows a nonzero flip rate. Injection note: the PR
+body/title are NOT sent to the model today (`_build_user_msg` sends repo + number
+only); the remaining vector is comments inside the diff.
