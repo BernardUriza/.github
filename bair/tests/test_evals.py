@@ -81,26 +81,29 @@ def test_offline_end_to_end_through_worktrees(tmp_path, monkeypatch, capsys):
 
     seen = []
 
-    def fake_review(diff, root, repo_name, pr, context_mode=None):
+    def fake_review(diff, root, repo_name, pr, context_mode=None, model=None):
         seen.append((Path(root).name, context_mode, "any(x)" in diff))
+        assert model in ("m-old", "m-new")
         blocked = Path(root).name == "defect-1"
         return gatekeep.GatekeepDecision(
             verdict="WARN" if blocked else "APPROVE", severity="CRITICAL" if blocked else "LOW", summary="s",
-            issues=[{"type": "data_plane", "severity": "CRITICAL", "message": "m.py:2 flips all→any"}] if blocked else [],
+            issues=[{"type": "correctness", "rule": "data_plane", "severity": "CRITICAL", "message": "m.py:2 flips all→any"}] if blocked else [],
             recommendation="", provider="fake", would_block=blocked,
         )
 
     monkeypatch.setattr(gatekeep, "review", fake_review)
     out = tmp_path / "rows.jsonl"
     assert runner.main(["--cases", str(tmp_path / "cases.json"), "--repo-dir", str(repo), "--runs", "2",
-                        "--context", "full,slice", "--workers", "2", "--out", str(out)]) == 0
+                        "--context", "full,slice", "--models", "m-old,m-new", "--workers", "2", "--out", str(out)]) == 0
     rows = [json.loads(line) for line in out.read_text().splitlines()]
-    assert len(rows) == 8 and all(r["prompt_sha"] for r in rows)
+    assert len(rows) == 16 and all(r["prompt_sha"] for r in rows)
+    assert {r["config"] for r in rows} == {"full@m-old", "full@m-new", "slice@m-old", "slice@m-new"}
     assert all(diff_has_change for _, _, diff_has_change in seen)
     assert {r["context"] for r in rows} == {"full", "slice"}
     assert all(r["localized"] for r in rows if r["case"] == "defect-1")
     report = capsys.readouterr().out
     assert "defects BLOCKed" in report and "1/1" in report
+    assert "Issues carrying a valid `rule`: 8/8" in report
     assert "`clean-1`" not in report  # held-out cases are never listed one by one
     assert not list(tmp_path.glob("bair-eval-*"))
     assert git("worktree", "list").count("\n") == 0  # worktrees cleaned up

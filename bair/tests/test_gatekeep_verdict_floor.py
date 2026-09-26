@@ -86,3 +86,24 @@ def test_non_block_verdicts_pass_through_the_shadow():
         d = _typed(v, ("data_plane", "CRITICAL"))
         assert gatekeep._shadow(d) is d
     assert "Would block" not in gatekeep._render_comment(_typed("WARN", ("style", "LOW")))
+
+
+def test_shadow_reads_the_enumerated_rule_not_the_free_type():
+    d = gatekeep.GatekeepDecision(
+        verdict="BLOCK", severity="CRITICAL", summary="s", recommendation="r", provider="p",
+        issues=[{"type": "correctness", "rule": "data_plane", "severity": "CRITICAL", "message": "m"}],
+    )
+    assert (gatekeep._shadow(d).verdict, gatekeep._shadow(d).would_block) == ("WARN", True)
+    general = gatekeep.GatekeepDecision(
+        verdict="BLOCK", severity="CRITICAL", summary="s", recommendation="r", provider="p",
+        issues=[{"type": "data_plane", "rule": "general", "severity": "CRITICAL", "message": "m"}],
+    )
+    assert gatekeep._shadow(general).verdict == "BLOCK"  # an explicit rule wins over the type
+
+
+def test_the_model_is_an_argument_first_then_env_then_default(monkeypatch):
+    monkeypatch.delenv("BAIR_GATEKEEP_MODEL", raising=False)
+    assert gatekeep._claude_model(None) == gatekeep._DEFAULT_CLAUDE_MODEL
+    monkeypatch.setenv("BAIR_GATEKEEP_MODEL", "env-model")
+    assert gatekeep._claude_model(None) == "env-model"
+    assert gatekeep._claude_model("arg-model") == "arg-model"

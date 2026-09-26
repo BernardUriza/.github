@@ -22,6 +22,7 @@ Return STRICT JSON exactly matching the schema (no markdown fences):
   "summary": "one-sentence overall judgment",
   "issues": [
     {"type": "security|crash|style|repository_rule|...", "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+     "rule": "data_plane" | "general",
      "message": "what + where", "rule_path": "the .claude rule file cited, or null for a generic finding"}
   ],
   "recommendation": "brief next-action advice for the developer"
@@ -51,9 +52,9 @@ what gets stored. For a change to it, judge the effect on the data itself:
   name the unseen reader and state the test that would settle it.
 Pure renames, logging, comments and changes that provably keep the stored shape
 and its readers identical are not data-plane behavior changes.
-Every issue raised under this section uses `"type": "data_plane"` and cites the
-file and line (or function) where the data goes wrong. Issues that are not about
-the data plane keep their own type.
+Every issue raised under this section sets `"rule": "data_plane"` and cites the
+file and line (or function) where the data goes wrong; every other issue sets
+`"rule": "general"`. The `rule` field is required on every issue.
 
 Repository-specific rules AND universal engineering doctrine are binding.
 

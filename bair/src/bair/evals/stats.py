@@ -48,7 +48,7 @@ def summarize(rows: list[dict]) -> dict[str, dict]:
     by_ctx: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
     labels: dict[str, str] = {}
     for r in rows:
-        by_ctx[r["context"]][r["case"]].append(r)
+        by_ctx[r.get("config") or r["context"]][r["case"]].append(r)
         labels[r["case"]] = r["label"]
     out: dict[str, dict] = {}
     for ctx, cases in by_ctx.items():

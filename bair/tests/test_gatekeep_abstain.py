@@ -17,10 +17,10 @@ def test_no_provider_abstains_with_the_reasons(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "key")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    def boom_oauth(system, user, token):
+    def boom_oauth(system, user, token, model=None):
         raise RuntimeError('Claude OAuth HTTP 429: {"type":"error","error":{"type":"rate_limit_error"}}')
 
-    def boom_anthropic(system, user, key):
+    def boom_anthropic(system, user, key, model=None):
         raise RuntimeError("Anthropic HTTP 401: API key is invalid.")
 
     monkeypatch.setattr(gatekeep, "_call_claude_oauth", boom_oauth)

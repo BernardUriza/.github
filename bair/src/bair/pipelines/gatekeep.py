@@ -130,7 +130,16 @@ def _abstain(failures: list[str]) -> GatekeepDecision:
     )
 
 
-def _call_llm(system: str, user: str) -> GatekeepDecision:
+_DEFAULT_CLAUDE_MODEL = "claude-opus-4-7"
+
+
+def _claude_model(model: str | None) -> str:
+    """The Claude model for this call: explicit argument (the eval suite A/Bs
+    models in parallel threads), else ``$BAIR_GATEKEEP_MODEL``, else the default."""
+    return model or os.environ.get("BAIR_GATEKEEP_MODEL") or _DEFAULT_CLAUDE_MODEL
+
+
+def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecision:
     """Try Claude OAuth, then Anthropic, then OpenAI; abstain when all fail.
 
     Each provider attempt catches every exception and records why it failed,
@@ -145,14 +154,14 @@ def _call_llm(system: str, user: str) -> GatekeepDecision:
     # runtimes. Falls back to a raw Anthropic key, then OpenAI, then UNAVAILABLE.
     if oauth_token:
         try:
-            return _call_claude_oauth(system, user, oauth_token)
+            return _call_claude_oauth(system, user, oauth_token, model=model)
         except Exception as exc:  # noqa: BLE001 — provider fallback
             logger.warning(f"Claude OAuth provider failed: {exc}")
             failures.append(f"claude-oauth: {_short(exc)}")
 
     if anthropic_key:
         try:
-            return _call_anthropic(system, user, anthropic_key)
+            return _call_anthropic(system, user, anthropic_key, model=model)
         except Exception as exc:  # noqa: BLE001 — provider fallback
             logger.warning(f"Anthropic provider failed: {exc}")
             failures.append(f"anthropic: {_short(exc)}")
@@ -178,7 +187,7 @@ _OAUTH_BACKOFF_BASE_S = 60
 _OAUTH_RETRY_AFTER_CAP_S = 300
 
 
-def _call_claude_oauth(system: str, user: str, token: str) -> GatekeepDecision:
+def _call_claude_oauth(system: str, user: str, token: str, model: str | None = None) -> GatekeepDecision:
     """Call the Anthropic Messages API with a Claude Code OAuth token (Max
     subscription): Bearer auth + the oauth beta header instead of x-api-key.
 
@@ -207,7 +216,7 @@ def _call_claude_oauth(system: str, user: str, token: str) -> GatekeepDecision:
                 "content-type": "application/json",
             },
             json={
-                "model": os.environ.get("BAIR_GATEKEEP_MODEL", "claude-opus-4-7"),
+                "model": _claude_model(model),
                 "max_tokens": 4000,
                 "system": [
                     {"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
@@ -246,7 +255,7 @@ def _call_claude_oauth(system: str, user: str, token: str) -> GatekeepDecision:
     )
 
 
-def _call_anthropic(system: str, user: str, key: str) -> GatekeepDecision:
+def _call_anthropic(system: str, user: str, key: str, model: str | None = None) -> GatekeepDecision:
     """Call Anthropic Messages API; raises on non-200 OR parse failure."""
     import httpx
     resp = httpx.post(
@@ -257,7 +266,7 @@ def _call_anthropic(system: str, user: str, key: str) -> GatekeepDecision:
             "content-type": "application/json",
         },
         json={
-            "model": os.environ.get("BAIR_GATEKEEP_MODEL", "claude-opus-4-7"),
+            "model": _claude_model(model),
             "max_tokens": 4000,
             "system": system,
             "messages": [{"role": "user", "content": user}],
@@ -385,7 +394,9 @@ def _post_comment(container: Container, repo: str, pr_num: str, body: str) -> No
 
 
 @command("gatekeep")
-def review(diff: str, root: str, repo: str, pr_num: str, context_mode: str | None = None) -> GatekeepDecision:
+def review(
+    diff: str, root: str, repo: str, pr_num: str, context_mode: str | None = None, model: str | None = None
+) -> GatekeepDecision:
     """The verdict on ``diff`` with the target repo checked out at ``root``: rules,
     changed-code context, LLM, severity floor, shadow. Shared by the live gate and
     the eval suite (``bair.evals``) so both measure the same path."""
@@ -412,7 +423,7 @@ def review(diff: str, root: str, repo: str, pr_num: str, context_mode: str | Non
     code_context = gather_changed_context(diff, root, mode=context_mode)
     logger.info(f"gatekeep: loaded {len(code_context)} bytes of changed-code context")
     user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules, code_context)
-    return _shadow(_floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg)))
+    return _shadow(_floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg, model=model)))
 
 
 def gatekeep(ctx: CommandContext, container: Container) -> None:
@@ -469,10 +480,17 @@ def _floor_verdict(d: GatekeepDecision) -> GatekeepDecision:
     return replace(d, verdict=floor)
 
 
-# Issue types whose rules report but do not gate yet: they run in shadow until the
-# eval suite (backlog 01) shows no false BLOCKs on held-out clean PRs. Emptying
-# this set is the whole promotion step.
-_SHADOW_TYPES = frozenset({"data_plane"})
+# Rules that report but do not gate yet: they run in shadow until the eval suite
+# (backlog 01) clears them. Emptying this set is the whole promotion step.
+# Attribution reads the enumerated `rule` field the prompt's schema requires; the
+# free-text `type` is only a fallback — the 2026-09-26 baseline showed the model
+# does not reliably type data-plane issues as `data_plane`.
+_SHADOW_RULES = frozenset({"data_plane"})
+
+
+def _in_shadow(issue: dict) -> bool:
+    rule = str(issue.get("rule") or "").strip().lower()
+    return rule in _SHADOW_RULES or (not rule and str(issue.get("type", "")) in _SHADOW_RULES)
 
 
 def _shadow(d: GatekeepDecision) -> GatekeepDecision:
@@ -482,7 +500,7 @@ def _shadow(d: GatekeepDecision) -> GatekeepDecision:
     if d.verdict != "BLOCK" or not d.issues:
         return d
     critical = [i for i in d.issues if str(i.get("severity", "")).upper() == "CRITICAL"]
-    if not critical or any(str(i.get("type", "")) not in _SHADOW_TYPES for i in critical):
+    if not critical or not all(_in_shadow(i) for i in critical):
         return d
     logger.warning("gatekeep: BLOCK held back to WARN — only shadow-mode (data_plane) issues are CRITICAL")
     return replace(d, verdict="WARN", would_block=True)
