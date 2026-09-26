@@ -1,0 +1,82 @@
+name: repo-mcp — build and deploy bair's read-only repo MCP
+
+# AIRE's reviewer reads the repository through this MCP (aire-server #48
+# remote_tools). Image on GHCR, served by the Container App `bair-repo-mcp`
+# (insult-rg, prod-env). AZURE_CREDENTIALS here is a service principal scoped to
+# that one app, revocable alone.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bair/src/bair/repo_mcp/**"
+      - "bair/Dockerfile.repo-mcp"
+      - "bair/tests/test_repo_mcp.py"
+      - ".github/workflows/repo-mcp.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: repo-mcp-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/bernarduriza/bair-repo-mcp
+  APP: bair-repo-mcp
+  RG: insult-rg
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test the MCP
+        working-directory: bair
+        run: |
+          pip install -q "fastapi>=0.110" "uvicorn>=0.29" "httpx>=0.27" "pytest>=8"
+          PYTHONPATH=src python -m pytest -q tests/test_repo_mcp.py -p no:cacheprovider --rootdir . -c /dev/null
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        working-directory: bair
+        run: |
+          docker build -f Dockerfile.repo-mcp -t "$IMAGE:$GITHUB_SHA" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE:latest"
+
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy
+        run: az containerapp update -n "$APP" -g "$RG" --image "$IMAGE:$GITHUB_SHA" -o none
+
+      - name: Verify the new revision serves
+        run: |
+          FQDN=$(az containerapp show -n "$APP" -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)
+          for i in $(seq 1 30); do
+            IMG=$(az containerapp show -n "$APP" -g "$RG" --query "properties.template.containers[0].image" -o tsv)
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://$FQDN/health" || true)
+            if [ "$IMG" = "$IMAGE:$GITHUB_SHA" ] && [ "$CODE" = "200" ]; then
+              UNAUTH=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://$FQDN/prepare" -d '{}')
+              [ "$UNAUTH" = "404" ] || { echo "::error::/prepare without a bearer answered $UNAUTH, expected 404"; exit 1; }
+              echo "serving $IMG; /health 200; unauthenticated /prepare 404" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::revision with $GITHUB_SHA never served /health 200"; exit 1

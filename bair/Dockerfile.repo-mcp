@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir "fastapi>=0.110" "uvicorn>=0.29" \
+ && useradd --create-home --uid 10001 mcp \
+ && mkdir -p /data/mirrors && chown mcp /data/mirrors
+
+COPY src/bair/__init__.py /app/bair/__init__.py
+COPY src/bair/repo_mcp /app/bair/repo_mcp
+
+USER mcp
+WORKDIR /app
+ENV PYTHONPATH=/app REPO_MCP_DATA=/data/mirrors PORT=8080
+EXPOSE 8080
+LABEL org.opencontainers.image.source=https://github.com/BernardUriza/.github
+CMD ["python", "-m", "bair.repo_mcp"]

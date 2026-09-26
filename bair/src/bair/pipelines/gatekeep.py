@@ -126,7 +126,7 @@ def _claude_model(model: str | None) -> str:
     return model or os.environ.get("BAIR_GATEKEEP_MODEL") or _DEFAULT_CLAUDE_MODEL
 
 
-def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecision:
+def _call_llm(system: str, user: str, model: str | None = None, repo_tools: Any = None) -> GatekeepDecision:
     """Try AIRE, then an Anthropic API key, then OpenAI; abstain when all fail.
 
     Each provider attempt catches every exception and records why it failed,
@@ -141,7 +141,7 @@ def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecis
     # revocable consumer token.
     if aire_token:
         try:
-            return _call_aire(system, user, aire_token, model=model)
+            return _call_aire(system, user, aire_token, model=model, repo_tools=repo_tools)
         except Exception as exc:  # noqa: BLE001 — provider fallback
             logger.warning(f"AIRE provider failed: {exc}")
             failures.append(f"aire: {_short(exc)}")
@@ -187,11 +187,15 @@ def _aire_casita(system: str) -> str:
     return f"bair-gatekeep-{hashlib.sha256(system.encode('utf-8')).hexdigest()[:32]}"
 
 
-def _call_aire(system: str, user: str, token: str, model: str | None = None) -> GatekeepDecision:
+def _call_aire(
+    system: str, user: str, token: str, model: str | None = None, repo_tools: Any = None
+) -> GatekeepDecision:
     """One review through AIRE with its canonical client (``fi_runner.AIREBackend``):
-    mode ``complete`` (the raw-API substitute — no builtins, no agentic loop), no
-    MCP servers, no tools, a throwaway session per review. AIRE holds the model
-    credential and mirrors the transcript; bair presents only its own token."""
+    mode ``complete`` (no builtins — no Write, no WebFetch), a throwaway session per
+    review. With ``repo_tools`` the turn mounts bair's read-only repo MCP through
+    the door's ``remote_tools`` and becomes an agentic read of the repository;
+    without it, one plain completion. AIRE holds the model credential and mirrors
+    the transcript; bair presents only its own token."""
     import asyncio
 
     from fi_runner import AIREBackend
@@ -208,13 +212,55 @@ def _call_aire(system: str, user: str, token: str, model: str | None = None) -> 
         backend.run_turn(
             system_prompt=system,
             user_message=user,
-            mcp_servers=[],
+            mcp_servers=[repo_tools] if repo_tools else [],
             tool_policy=ToolPolicy(),
             model=_claude_model(model),
             session_id=None,
         )
     )
-    return _normalize(_extract_json(result.text or ""), provider="aire")
+    answer = getattr(result, "answer", "") or result.text or ""
+    return _normalize(_extract_json(answer), provider="aire+repo" if repo_tools else "aire")
+
+
+_REPO_TOOLS_ENV = "BAIR_REPO_TOOLS"
+_REPO_MCP_URL_ENV = "BAIR_REPO_MCP_URL"
+_REPO_MCP_TOKEN_ENV = "BAIR_REPO_MCP_TOKEN"
+
+
+def _repo_tools_enabled() -> bool:
+    return os.environ.get(_REPO_TOOLS_ENV, "").strip().lower() in ("1", "on", "true", "yes")
+
+
+def _repo_tools(repo: str, base_sha: str, head_sha: str) -> Any:
+    """Pin this review in bair's repo MCP and return its spec, or ``None``.
+
+    ``/prepare`` runs from HERE (the runner) with the workflow's own GitHub token,
+    so that token never travels to AIRE; AIRE only gets the capsule url and the
+    MCP's bearer. Any failure degrades to the plain review, logged, never a crash."""
+    url = os.environ.get(_REPO_MCP_URL_ENV, "").rstrip("/")
+    token = os.environ.get(_REPO_MCP_TOKEN_ENV, "")
+    github_token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
+    if not (url and token and repo and base_sha and head_sha):
+        logger.warning("repo tools on but BAIR_REPO_MCP_URL/TOKEN or the SHAs are missing — plain review")
+        return None
+    import httpx
+    from fi_runner.backend import MCPServerSpec
+
+    try:
+        resp = httpx.post(
+            f"{url}/prepare",
+            headers={"Authorization": f"Bearer {token}", "X-GitHub-Token": github_token},
+            json={"repo": repo, "base_sha": base_sha, "head_sha": head_sha},
+            timeout=300.0,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning(f"repo MCP /prepare failed: {_short(exc)} — plain review")
+        return None
+    if resp.status_code != 200:
+        logger.warning(f"repo MCP /prepare answered {resp.status_code}: {resp.text[:200]} — plain review")
+        return None
+    capsule = resp.json()["capsule"]
+    return MCPServerSpec(name="repo", url=f"{url}/mcp/{capsule}", headers={"Authorization": f"Bearer {token}"})
 
 
 def _call_anthropic(system: str, user: str, key: str, model: str | None = None) -> GatekeepDecision:
@@ -395,7 +441,14 @@ def _post_comment(container: Container, repo: str, pr_num: str, body: str) -> No
 
 
 def review(
-    diff: str, root: str, repo: str, pr_num: str, context_mode: str | None = None, model: str | None = None
+    diff: str,
+    root: str,
+    repo: str,
+    pr_num: str,
+    context_mode: str | None = None,
+    model: str | None = None,
+    base_sha: str = "",
+    head_sha: str = "",
 ) -> GatekeepDecision:
     """The verdict on ``diff`` with the target repo checked out at ``root``: rules,
     changed-code context, LLM, severity floor, shadow. Shared by the live gate and
@@ -423,7 +476,11 @@ def review(
     code_context = gather_changed_context(diff, root, mode=context_mode)
     logger.info(f"gatekeep: loaded {len(code_context)} bytes of changed-code context")
     user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules, code_context)
-    return _shadow(_floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg, model=model)))
+    system = load_prompt("gatekeep_system")
+    tools = _repo_tools(repo, base_sha, head_sha) if _repo_tools_enabled() else None
+    if tools is not None:
+        system += load_prompt("gatekeep_repo_tools")
+    return _shadow(_floor_verdict(_call_llm(system, user_msg, model=model, repo_tools=tools)))
 
 
 @command("gatekeep")
@@ -445,7 +502,7 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
         _set_output("executed", "false")
         sys.exit(1)
 
-    decision = review(_get_diff(base_sha, head_sha), ".", repo, pr_num)
+    decision = review(_get_diff(base_sha, head_sha), ".", repo, pr_num, base_sha=base_sha, head_sha=head_sha)
 
     body = _render_comment(decision)
     _post_comment(container, repo, pr_num, body)

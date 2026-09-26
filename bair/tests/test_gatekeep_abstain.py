@@ -17,7 +17,7 @@ def test_no_provider_abstains_with_the_reasons(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "key")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    def boom_aire(system, user, token, model=None):
+    def boom_aire(system, user, token, model=None, repo_tools=None):
         raise RuntimeError("AIRE door 503: engine pool exhausted")
 
     def boom_anthropic(system, user, key, model=None):

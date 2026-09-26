@@ -51,7 +51,10 @@ def _run_one(
     case: dict, ctx: str, model: str, run: int, tree: Path, diff: str, repo: str, fix_files: list[str], meta: dict
 ) -> dict:
     started = time.monotonic()
-    d = gatekeep.review(diff, str(tree), repo, case["id"], context_mode=ctx, model=model)
+    d = gatekeep.review(
+        diff, str(tree), repo, case["id"], context_mode=ctx, model=model,
+        base_sha=case["base"], head_sha=case["head"],
+    )
     return {
         **meta,
         "case": case["id"],

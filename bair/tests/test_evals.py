@@ -82,7 +82,7 @@ def test_offline_end_to_end_through_worktrees(tmp_path, monkeypatch, capsys):
 
     seen = []
 
-    def fake_review(diff, root, repo_name, pr, context_mode=None, model=None):
+    def fake_review(diff, root, repo_name, pr, context_mode=None, model=None, base_sha="", head_sha=""):
         seen.append((Path(root).name, context_mode, "any(x)" in diff))
         assert model in ("m-old", "m-new")
         blocked = Path(root).name == "defect-1"
