@@ -11,8 +11,9 @@ Failure modes it exists to avoid (history in BernardUriza/.github backlog 01):
 
   - **Silent approval.** The predecessor in free-intelligence failed OPEN on a
     401 for weeks: green check, zero review. Every run here posts a comment.
-  - **Blocking on infrastructure.** Providers are tried in order — Claude OAuth
-    (Max pool, transient 429/5xx/timeouts retried with backoff), Anthropic key,
+  - **Blocking on infrastructure.** Providers are tried in order — the owner's
+    subscription through the unmodified `claude` binary (isolated; it retries the
+    API itself), an Anthropic API key,
     OpenAI — and if none answers the gate ABSTAINS out loud (exit 0).
   - **Trusting the model's JSON.** A lowercase or invented verdict once exited 0
     and a null severity crashed the gate with no comment; ``_normalize`` closes it.
@@ -125,7 +126,8 @@ def _claude_model(model: str | None) -> str:
 
 
 def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecision:
-    """Try Claude OAuth, then Anthropic, then OpenAI; abstain when all fail.
+    """Try the Claude Code binary (subscription), then an Anthropic API key, then
+    OpenAI; abstain when all fail.
 
     Each provider attempt catches every exception and records why it failed,
     so the abstention comment carries the diagnosis instead of "none"."""
@@ -134,15 +136,16 @@ def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecis
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     failures: list[str] = []
 
-    # Prefer a Claude Code OAuth token (Max subscription) — no per-call API
-    # billing, and it's the credential the owner already keeps fresh for their
-    # runtimes. Falls back to a raw Anthropic key, then OpenAI, then UNAVAILABLE.
+    # Prefer the owner's Claude subscription — through the unmodified `claude`
+    # binary, the path Anthropic's terms allow for a subscription OAuth token (see
+    # _call_claude_code). Falls back to an Anthropic API key, then OpenAI, then
+    # UNAVAILABLE.
     if oauth_token:
         try:
-            return _call_claude_oauth(system, user, oauth_token, model=model)
+            return _call_claude_code(system, user, oauth_token, model=model)
         except Exception as exc:  # noqa: BLE001 — provider fallback
-            logger.warning(f"Claude OAuth provider failed: {exc}")
-            failures.append(f"claude-oauth: {_short(exc)}")
+            logger.warning(f"Claude Code provider failed: {exc}")
+            failures.append(f"claude-code: {_short(exc)}")
 
     if anthropic_key:
         try:
@@ -166,79 +169,73 @@ def _short(exc: BaseException, limit: int = 160) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-_RETRYABLE_STATUSES = {429, 500, 502, 503, 529}
-_OAUTH_MAX_ATTEMPTS = 4
-_OAUTH_BACKOFF_BASE_S = 60
-_OAUTH_RETRY_AFTER_CAP_S = 300
-_OAUTH_TIMEOUT_S = 180  # thinking models (Opus 5.5: median 17 s on the eval) on large contexts
+_CLI_TIMEOUT_S = 600  # the binary retries the API itself (429/5xx) inside this budget
+_CLI_PROMPT = (
+    "Review the pull request given as input. Answer with the JSON object your "
+    "instructions require, and nothing else."
+)
+# The only variables the binary sees: it must not reach the job's GitHub token or
+# any other secret, and it must not pick an API key over the subscription.
+_CLI_ENV_PASSTHROUGH = ("PATH", "LANG", "LC_ALL", "TMPDIR", "SSL_CERT_FILE", "SSL_CERT_DIR", "HTTPS_PROXY", "NO_PROXY")
 
 
-def _call_claude_oauth(system: str, user: str, token: str, model: str | None = None) -> GatekeepDecision:
-    """Call the Anthropic Messages API with a Claude Code OAuth token (Max
-    subscription): Bearer auth + the oauth beta header instead of x-api-key.
+def _call_claude_code(system: str, user: str, token: str, model: str | None = None) -> GatekeepDecision:
+    """Review through the unmodified `claude` binary in print mode with the
+    owner's subscription token (``CLAUDE_CODE_OAUTH_TOKEN``).
 
-    The OAuth flow requires the request to present the Claude Code identity, so
-    the system prompt is sent as a structured array whose FIRST block is that
-    identity and the SECOND is the actual gatekeeper instruction.
+    Why the binary and not the Messages API: Anthropic's terms reserve
+    subscription OAuth for "ordinary use of Claude Code and other native
+    Anthropic applications" and ask developers building tools to use API keys
+    (code.claude.com/docs/en/legal-and-compliance). Until 2026-09-26 bair sent
+    the token straight to /v1/messages under a spoofed Claude Code identity; the
+    binary is the sanctioned path, and the one Anthropic documents for CI.
 
-    The Max account is a POOL shared with the owner's live sessions and
-    runtimes, so a 429 here usually means transient contention, not a dead
-    credential — and a CI batch job can afford to wait it out. Retries
-    429/5xx/529, timeouts and transport errors with exponential backoff + jitter,
-    honoring ``retry-after`` when sane. Non-retryable statuses (401, 403, 400) raise immediately so
-    _call_llm fails closed without burning runner minutes."""
-    import httpx
-    import random
-    import time
+    Isolation — the binary loads hooks, settings and MCP servers from its working
+    directory and HOME, and a PR controls the checkout. So it runs in an empty
+    temporary directory with an empty HOME, a minimal environment (no GH_TOKEN,
+    no API key), every tool disabled, one turn, and no session saved. The PR
+    reaches it only as stdin text."""
+    import shutil
+    import subprocess as sp
+    import tempfile
 
-    resp = None
-    for attempt in range(_OAUTH_MAX_ATTEMPTS):
-        try:
-            resp = httpx.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "anthropic-beta": "oauth-2025-04-20",
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": _claude_model(model),
-                    "max_tokens": 4000,
-                    "system": [
-                        {"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
-                        {"type": "text", "text": system},
-                    ],
-                    "messages": [{"role": "user", "content": user}],
-                },
-                timeout=_OAUTH_TIMEOUT_S,
-            )
-        except (httpx.TimeoutException, httpx.TransportError) as exc:
-            # A network hiccup or a slow thinking model is as transient as a 429.
-            resp = None
-            if attempt == _OAUTH_MAX_ATTEMPTS - 1:
-                raise RuntimeError(f"Claude OAuth transport error: {type(exc).__name__}: {exc}") from exc
-            status = type(exc).__name__
-        else:
-            if resp.status_code == 200:
-                break
-            if resp.status_code not in _RETRYABLE_STATUSES or attempt == _OAUTH_MAX_ATTEMPTS - 1:
-                raise RuntimeError(f"Claude OAuth HTTP {resp.status_code}: {resp.text[:300]}")
-            status = f"HTTP {resp.status_code}"
-        retry_after = resp.headers.get("retry-after", "") if resp is not None else ""
-        if retry_after.isdigit() and int(retry_after) <= _OAUTH_RETRY_AFTER_CAP_S:
-            wait = int(retry_after)
-        else:
-            wait = random.uniform(0, min(_OAUTH_BACKOFF_BASE_S * (2 ** attempt), _OAUTH_RETRY_AFTER_CAP_S))
-        logger.warning(
-            f"Claude OAuth {status} (attempt {attempt + 1}/{_OAUTH_MAX_ATTEMPTS}), retrying in {wait:.0f}s"
+    binary = shutil.which(os.environ.get("BAIR_CLAUDE_BIN", "claude"))
+    if not binary:
+        raise RuntimeError("claude CLI not found — the workflow must install Claude Code (claude.ai/install.sh)")
+    with tempfile.TemporaryDirectory(prefix="bair-claude-") as tmp:
+        system_file = os.path.join(tmp, "gatekeep_system.txt")
+        with open(system_file, "w", encoding="utf-8") as fh:
+            fh.write(system)
+        env = {k: os.environ[k] for k in _CLI_ENV_PASSTHROUGH if k in os.environ}
+        env.update(
+            HOME=tmp,
+            CLAUDE_CONFIG_DIR=os.path.join(tmp, ".claude"),
+            CLAUDE_CODE_OAUTH_TOKEN=token,
+            DISABLE_AUTOUPDATER="1",
         )
-        time.sleep(wait)
-    if resp is None or resp.status_code != 200:
-        raise RuntimeError("Claude OAuth: no successful response")
-    data = resp.json()
-    text = _response_text(data)
-    return _normalize(_extract_json(text), provider="claude-oauth")
+        proc = sp.run(
+            [
+                binary, "-p", _CLI_PROMPT,
+                "--output-format", "json",
+                "--system-prompt-file", system_file,
+                "--disallowedTools", "*",
+                "--max-turns", "1",
+                "--no-session-persistence",
+                "--model", _claude_model(model),
+            ],
+            input=user, cwd=tmp, env=env, capture_output=True, text=True, timeout=_CLI_TIMEOUT_S,
+        )
+    try:
+        data = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        detail = (proc.stderr or proc.stdout or "").strip()[:300]
+        raise RuntimeError(f"claude CLI exit {proc.returncode}, unreadable output: {detail}") from exc
+    if data.get("is_error") or data.get("subtype") != "success":
+        raise RuntimeError(
+            f"claude CLI {data.get('subtype')} (api status {data.get('api_error_status')}): "
+            f"{str(data.get('result', ''))[:300]}"
+        )
+    return _normalize(_extract_json(str(data.get("result", ""))), provider="claude-code")
 
 
 def _call_anthropic(system: str, user: str, key: str, model: str | None = None) -> GatekeepDecision:
