@@ -16,7 +16,9 @@ python -m pytest                      # offline, no LLM calls
 python -m bair gatekeep               # needs REPO, PR_NUM, BASE_SHA, HEAD_SHA + a Claude credential
 ```
 
-Credentials, in the order the gate tries them: `CLAUDE_CODE_OAUTH_TOKEN` (Max pool, preferred) → `ANTHROPIC_API_KEY` → `OPENAI_API_KEY`. None answering → the gate **abstains out loud** (comment + exit 0), never blocks on infrastructure.
+Credentials, in the order the gate tries them: `CLAUDE_CODE_OAUTH_TOKEN` → `ANTHROPIC_API_KEY` → `OPENAI_API_KEY`. None answering → the gate **abstains out loud** (comment + exit 0), never blocks on infrastructure.
+
+**The subscription token only ever reaches the unmodified `claude` binary** (`_call_claude_code`), never the Messages API: Anthropic's terms reserve subscription OAuth for "ordinary use of Claude Code and other native Anthropic applications" ([legal-and-compliance](https://code.claude.com/docs/en/legal-and-compliance)). Consumer workflows install it (`curl -fsSL https://claude.ai/install.sh | bash -s stable`). bair runs it isolated — empty temp dir as cwd and HOME, minimal env (no `GH_TOKEN`), `--disallowedTools '*'`, one turn — because it would otherwise load hooks/MCP from the PR's checkout. The **eval suite uses an API key only** (a batch of ~150 reviews is not ordinary individual use).
 
 ---
 
