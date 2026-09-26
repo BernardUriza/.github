@@ -47,6 +47,7 @@ _PRIORITY_STEMS = (
 )
 
 _DEFAULT_MAX_BYTES = 60_000
+_CONSTITUTION_DIR = "_constitution"
 _PLAYBOOK_MAX_BYTES = 100_000
 
 _CURATED_PLAYBOOK_RULES = (
@@ -134,7 +135,17 @@ def _collect_files(root: Path) -> list[Path]:
         files.append(claude_md)
     rules_dir = claude_dir / "rules"
     if rules_dir.is_dir():
-        files.extend(sorted(rules_dir.rglob("*.md"), key=lambda p: str(p)))
+        # `_constitution/` is what `constitution install` materializes locally
+        # (gitignored): reading it would give the same PR different doctrine on a
+        # Mac with the install than on a clean CI checkout. The target's own
+        # committed rules are the review's doctrine; the constitution, if ever
+        # wanted, is read on purpose from its lock.
+        files.extend(
+            sorted(
+                (p for p in rules_dir.rglob("*.md") if _CONSTITUTION_DIR not in p.relative_to(rules_dir).parts),
+                key=lambda p: str(p),
+            )
+        )
     return sorted(files, key=lambda p: (_priority(p), str(p)))
 
 

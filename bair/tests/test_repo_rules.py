@@ -160,3 +160,15 @@ def test_user_msg_states_absence_when_no_rules() -> None:
     msg = _build_user_msg(diff="d", repo_rules="", repo="o/r", pr_num="1")
     assert "No repository rules found." in msg
     assert "No universal playbook rules available." in msg
+
+
+def test_the_local_constitution_install_is_not_read_as_repo_doctrine(tmp_path) -> None:
+    """Same PR, same doctrine, wherever the gate runs: `constitution install`
+    materializes gitignored rules under `.claude/rules/_constitution/` on a dev
+    machine, never in a clean CI checkout (2026-09-26)."""
+    _mk(tmp_path, ".claude/rules/local.md", "# Local rule\nkeep me")
+    _mk(tmp_path, ".claude/rules/_constitution/core--never-print-secrets.md", "# Core\nnot mine")
+    _mk(tmp_path, ".claude/rules/_constitution/overlay-bernard--x.md", "# Overlay\nnot mine")
+    out = gather_repo_rules(tmp_path)
+    assert "FILE: .claude/rules/local.md" in out and "keep me" in out
+    assert "_constitution" not in out and "not mine" not in out
