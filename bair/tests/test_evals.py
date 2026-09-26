@@ -46,13 +46,14 @@ def test_packaged_cases_are_balanced_and_complete():
     spec = runner._load_cases(None)
     cases = spec["cases"]
     assert spec["repo"] == "BernardUriza/server-bot"
-    for label in ("defect", "clean"):
-        for split in ("dev", "heldout"):
-            assert sum(c["label"] == label and c["split"] == split for c in cases) == 6
+    assert len(cases) == 24
+    for split in ("dev", "heldout"):
+        assert sum(c["split"] == split for c in cases) == 12
     for c in cases:
         assert len(c["base"]) == 40 and len(c["head"]) == 40
-        assert bool(c["fix"]) == (c["label"] == "defect")
         assert (c["label"] == "defect") == bool(c["truth"])
+        # a defect names the fix that proves it, or says it is latent (found by the suite, verified by hand)
+        assert c["label"] == "clean" and not c["fix"] or c["label"] == "defect" and (c["fix"] or "latent" in c["source"])
     blob = json.dumps(cases).lower()
     assert "deliberate" not in blob and "planted" not in blob
 

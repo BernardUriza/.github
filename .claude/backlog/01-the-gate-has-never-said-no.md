@@ -260,3 +260,43 @@ Next, evidence-driven: (1) make shadow attribution not depend on the model's fre
 per changed call "what does this library actually do here?" is the candidate the
 research points to (Anthropic's verification step, BitsAI-CR filter); measure it
 with this suite before shipping; (3) grow n toward 50 per class for real intervals.
+
+## Step 7 — model A/B, claude-opus-4-7 vs claude-opus-5-5 (2026-09-26)
+
+**First attempt void** (run 36209279458): 72/72 opus-5-5 reviews UNAVAILABLE — the
+gate read `content[0]["text"]` and Opus 5.5 always thinks, so a `thinking` block
+comes first. A production bug waiting for the first model bump; fixed in `9ea197b`
+(join `text` blocks; `raw_decode` the first JSON object — 1/72 opus-4-7 reviews had
+also failed on trailing prose). Same run showed the enumerated `rule` works: 94/94
+issues carried a valid value.
+
+**Valid run** 36209965979 · prompt `5d1c3545aae6` · bair `9ea197b` · slice context ·
+3 runs · 144 rows · 0 unavailable · rule compliance 341/341 · median 6 s (4-7) vs
+17 s (5-5). Both at production defaults: 4-7 runs without thinking, 5-5 with
+adaptive thinking at its default effort (`medium`) — the comparison is
+"model + its default thinking", not the model alone.
+
+| split | config | defects BLOCKed | defects ≥WARN | clean falsely BLOCKed | clean ≥WARN |
+|---|---|---|---|---|---|
+| dev (as labelled) | 4-7 | 2/6 | 2/6 | 0/6 | 0/6 |
+| dev (as labelled) | 5-5 | 2/6 | 4/6 | 1/6 | 2/6 |
+| **held-out** | 4-7 | **0/6** | 2/6 | **0/6** | 2/6 |
+| **held-out** | 5-5 | **4/6** (30–90%) | 4/6 | **3/6** (19–81%) | 4/6 |
+
+**Pre-registered rule: switch only if held-out BLOCKs ≥, ≥WARN ≥, and no added false
+BLOCKs → FAILS on false BLOCKs (3/6 vs 0/6). The default stays `claude-opus-4-7`.**
+
+**But the one dev "false BLOCK" was a mislabel.** `clean-13884b5` (agent_facts MCP
+tools): opus-5-5 said 3/3 runs that `update_agent_fact` scopes its UPDATE/soft-delete
+by fact id only, never by `agent_id`, so Insult can rewrite ALICE's self-facts — which
+the PR itself forbids, guarded only by a persona instruction. Verified by hand, and
+**still live on server-bot main** (`persona_runner/mcp_tools/agent_facts.py:111`).
+Relabelled as a latent defect (`defect-13884b5`, split dev), per the documented
+practice of adding latent defects to the ground truth rather than scoring them as
+false positives. Dev rescored with the correct label: 4-7 BLOCKs 2/7, flags 2/7,
+0/5 false BLOCKs; 5-5 BLOCKs 3/7, flags 5/7, **0/5 false BLOCKs**.
+
+That makes the held-out 3/6 suspect in the same way, and the decision hinges on it.
+Next: a **label audit of the three held-out clean cases opus-5-5 BLOCKed** — reading
+them spends them as held-out, so each audited case moves to dev and a fresh clean
+case replaces it in held-out; the A/B then reruns on the rebuilt held-out.

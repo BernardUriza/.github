@@ -156,12 +156,12 @@
    "fix": ""
   },
   {
-   "id": "clean-13884b5",
-   "label": "clean",
+   "id": "defect-13884b5",
+   "label": "defect",
    "base": "56ee53411c6a0459a194008f90859b904b61a9d9",
    "head": "13884b554dc187ec9bc89b47ef42f07478eb2609",
-   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
-   "truth": "",
+   "source": "latent: flagged by claude-opus-5-5 in eval run 36209965979 (3/3 runs), verified by hand 2026-09-26; still unfixed on main",
+   "truth": "update_agent_fact scopes its UPDATE/soft-delete by fact id only, never by agent_id — Insult can rewrite or delete ALICE's self-facts, which the PR itself says must never happen; only a persona instruction prevents it",
    "subject": "feat(agent-facts): bot self-knowledge — agents + agent_facts table + MCP CRUD tools (4.20.14) (#4)",
    "split": "dev",
    "fix": ""
