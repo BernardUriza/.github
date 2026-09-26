@@ -156,17 +156,35 @@ def main(argv: list[str] | None = None) -> int:
     trees: dict[str, Path] = {}
     diffs: dict[str, str] = {}
     fixes: dict[str, list[str]] = {}
+    setup_errors: dict[str, str] = {}
     try:
+        # Per case: one unreachable SHA (a deleted branch, a force-push) must cost
+        # that case, not the whole run and its report.
         for c in cases:
             tree = work / c["id"]
-            _git(repo_dir, "worktree", "add", "--detach", "-q", str(tree), c["head"])
-            trees[c["id"]] = tree
-            diffs[c["id"]] = _git(tree, "diff", f"{c['base']}...{c['head']}")[:200_000]
-            fixes[c["id"]] = _git(repo_dir, "diff-tree", "--no-commit-id", "--name-only", "-r", c["fix"]).split() if c.get("fix") else []
+            try:
+                _git(repo_dir, "worktree", "add", "--detach", "-q", str(tree), c["head"])
+                trees[c["id"]] = tree
+                diffs[c["id"]] = _git(tree, "diff", f"{c['base']}...{c['head']}")[:200_000]
+                fixes[c["id"]] = (
+                    _git(repo_dir, "diff-tree", "--no-commit-id", "--name-only", "-r", c["fix"]).split()
+                    if c.get("fix")
+                    else []
+                )
+            except subprocess.CalledProcessError as exc:
+                setup_errors[c["id"]] = f"setup: {' '.join(exc.cmd[1:3])}: {(exc.stderr or '').strip()[:200]}"
+                print(f"[setup] {c['id']}: {setup_errors[c['id']]}", file=sys.stderr)
 
         jobs = [(c, ctx, m, r) for c in cases for ctx in contexts for m in models for r in range(args.runs)]
         rows: list[dict] = []
         with ThreadPoolExecutor(max_workers=args.workers) as pool, open(args.out, "w", encoding="utf-8") as out:
+            for c, ctx, m, r in [j for j in jobs if j[0]["id"] in setup_errors]:
+                row = {**meta, "case": c["id"], "label": c["label"], "split": c["split"], "context": ctx,
+                       "model": m, "config": f"{ctx}@{m}", "run": r, "verdict": "UNAVAILABLE",
+                       "error": setup_errors[c["id"]]}
+                rows.append(row)
+                out.write(json.dumps(row, ensure_ascii=False) + "\n")
+            jobs = [j for j in jobs if j[0]["id"] not in setup_errors]
             futures = {
                 pool.submit(_run_one, c, ctx, m, r, trees[c["id"]], diffs[c["id"]], spec["repo"], fixes[c["id"]], meta): (
                     c["id"], ctx, m, r

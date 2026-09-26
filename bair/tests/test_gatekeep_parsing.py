@@ -40,3 +40,28 @@ def test_the_first_json_object_is_read_despite_surrounding_prose(raw):
 def test_no_object_raises():
     with pytest.raises(ValueError):
         gatekeep._extract_json("I could not review this.")
+
+
+# -- _normalize: the model's JSON made safe for the code that gates on it ---------
+
+
+def test_a_lowercase_block_still_exits_1():
+    d = gatekeep._floor_verdict(gatekeep._normalize({"verdict": "block", "severity": "critical"}, provider="p"))
+    assert (d.verdict, d.severity) == ("BLOCK", "CRITICAL")
+    assert gatekeep._exit_code(d.verdict) == 1
+
+
+def test_an_unknown_verdict_is_never_milder_than_warn():
+    assert gatekeep._normalize({"verdict": "REQUEST_CHANGES", "severity": "LOW"}, provider="p").verdict == "WARN"
+    crit = gatekeep._normalize({"verdict": "nope", "issues": [{"severity": "CRITICAL"}]}, provider="p")
+    assert crit.verdict == "BLOCK"
+
+
+def test_nulls_and_junk_issues_do_not_crash_the_gate():
+    d = gatekeep._normalize({"verdict": "WARN", "severity": None, "issues": None, "summary": None}, provider="p")
+    assert (d.severity, d.issues, d.summary) == ("MEDIUM", [], "")
+    junk = gatekeep._normalize({"verdict": "APPROVE", "severity": "LOW", "issues": ["free text", None, {"severity": 5}]}, provider="p")
+    assert junk.issues[0]["type"] == "unstructured" and len(junk.issues) == 2
+    for step in (gatekeep._floor_verdict, gatekeep._shadow):
+        step(junk)
+    gatekeep._render_comment(junk)

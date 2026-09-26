@@ -111,3 +111,35 @@ def test_offline_end_to_end_through_worktrees(tmp_path, monkeypatch, capsys):
     assert "`clean-1`" not in report  # held-out cases are never listed one by one
     assert not list(tmp_path.glob("bair-eval-*"))
     assert git("worktree", "list").count("\n") == 0  # worktrees cleaned up
+
+
+def test_an_unreachable_case_costs_that_case_not_the_run(tmp_path, monkeypatch, capsys):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git = lambda *a: subprocess.run(["git", *a], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()  # noqa: E731
+    git("init", "-q")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (repo / "m.py").write_text("def f():\n    return 1\n")
+    git("add", "-A"); git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD")
+    (repo / "m.py").write_text("def f():\n    return 2\n")
+    git("commit", "-qam", "change")
+    head = git("rev-parse", "HEAD")
+    gone = "0" * 40
+    cases = {"repo": "o/r", "cases": [
+        {"id": "clean-ok", "label": "clean", "split": "dev", "base": base, "head": head, "fix": "", "truth": ""},
+        {"id": "clean-gone", "label": "clean", "split": "dev", "base": base, "head": gone, "fix": "", "truth": ""},
+    ]}
+    (tmp_path / "cases.json").write_text(json.dumps(cases))
+    monkeypatch.setattr(gatekeep, "review", lambda *a, **k: gatekeep.GatekeepDecision(
+        verdict="APPROVE", severity="LOW", summary="s", issues=[], recommendation="", provider="fake"))
+    out = tmp_path / "rows.jsonl"
+    assert runner.main(["--cases", str(tmp_path / "cases.json"), "--repo-dir", str(repo), "--runs", "2",
+                        "--models", "m", "--workers", "1", "--out", str(out)]) == 0
+    rows = [json.loads(line) for line in out.read_text().splitlines()]
+    assert len(rows) == 4
+    assert {r["verdict"] for r in rows if r["case"] == "clean-ok"} == {"APPROVE"}
+    gone_rows = [r for r in rows if r["case"] == "clean-gone"]
+    assert len(gone_rows) == 2 and all(r["verdict"] == "UNAVAILABLE" and r["error"].startswith("setup:") for r in gone_rows)
+    assert "| 1 |" in capsys.readouterr().out  # reported in the unavailable column

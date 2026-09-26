@@ -244,15 +244,7 @@ def _call_claude_oauth(system: str, user: str, token: str, model: str | None = N
         raise RuntimeError("Claude OAuth: no successful response")
     data = resp.json()
     text = _response_text(data)
-    parsed = _extract_json(text)
-    return GatekeepDecision(
-        verdict=parsed.get("verdict", "WARN"),
-        severity=parsed.get("severity", "MEDIUM"),
-        summary=parsed.get("summary", ""),
-        issues=parsed.get("issues", []),
-        recommendation=parsed.get("recommendation", ""),
-        provider="claude-oauth",
-    )
+    return _normalize(_extract_json(text), provider="claude-oauth")
 
 
 def _call_anthropic(system: str, user: str, key: str, model: str | None = None) -> GatekeepDecision:
@@ -277,15 +269,7 @@ def _call_anthropic(system: str, user: str, key: str, model: str | None = None) 
         raise RuntimeError(f"Anthropic HTTP {resp.status_code}: {resp.text[:300]}")
     data = resp.json()
     text = _response_text(data)
-    parsed = _extract_json(text)
-    return GatekeepDecision(
-        verdict=parsed.get("verdict", "WARN"),
-        severity=parsed.get("severity", "MEDIUM"),
-        summary=parsed.get("summary", ""),
-        issues=parsed.get("issues", []),
-        recommendation=parsed.get("recommendation", ""),
-        provider="anthropic",
-    )
+    return _normalize(_extract_json(text), provider="anthropic")
 
 
 def _call_openai(system: str, user: str, key: str) -> GatekeepDecision:
@@ -311,15 +295,7 @@ def _call_openai(system: str, user: str, key: str) -> GatekeepDecision:
         raise RuntimeError(f"OpenAI HTTP {resp.status_code}: {resp.text[:300]}")
     data = resp.json()
     text = data["choices"][0]["message"]["content"]
-    parsed = _extract_json(text)
-    return GatekeepDecision(
-        verdict=parsed.get("verdict", "WARN"),
-        severity=parsed.get("severity", "MEDIUM"),
-        summary=parsed.get("summary", ""),
-        issues=parsed.get("issues", []),
-        recommendation=parsed.get("recommendation", ""),
-        provider="openai",
-    )
+    return _normalize(_extract_json(text), provider="openai")
 
 
 def _response_text(data: dict[str, Any]) -> str:
@@ -331,6 +307,42 @@ def _response_text(data: dict[str, Any]) -> str:
     if not text.strip():
         raise ValueError(f"no text block in response (stop_reason={data.get('stop_reason')!r})")
     return text
+
+
+_VERDICTS = ("APPROVE", "WARN", "BLOCK")
+_SEVERITIES = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+
+
+def _normalize(parsed: dict[str, Any], *, provider: str) -> GatekeepDecision:
+    """The model's JSON, made safe for the code that gates on it. Before this, a
+    verdict like "block" or "REQUEST_CHANGES" skipped the severity floor and exited
+    0 (a BLOCK merged silently), and a null severity/issues crashed the gate outside
+    the provider fallback — a red check with no comment. Unknown severities read as
+    MEDIUM; a non-dict issue is kept as an unstructured MEDIUM finding; an unknown
+    verdict is derived from the worst severity and is never milder than WARN."""
+    severity = str(parsed.get("severity") or "").strip().upper()
+    if severity not in _SEVERITIES:
+        severity = "MEDIUM"
+    raw_issues = parsed.get("issues")
+    issues: list[dict[str, str]] = []
+    for item in raw_issues if isinstance(raw_issues, list) else []:
+        if isinstance(item, dict):
+            issues.append({str(k): v if isinstance(v, str) or v is None else str(v) for k, v in item.items()})
+        elif item is not None:
+            issues.append({"type": "unstructured", "severity": "MEDIUM", "rule": "general", "message": str(item)})
+    verdict = str(parsed.get("verdict") or "").strip().upper()
+    if verdict not in _VERDICTS:
+        worst = [severity, *(str(i.get("severity") or "").upper() for i in issues)]
+        verdict = "BLOCK" if "CRITICAL" in worst else "WARN"
+        logger.warning(f"gatekeep: model returned verdict {parsed.get('verdict')!r}; read as {verdict}")
+    return GatekeepDecision(
+        verdict=verdict,
+        severity=severity,
+        summary=str(parsed.get("summary") or ""),
+        issues=issues,
+        recommendation=str(parsed.get("recommendation") or ""),
+        provider=provider,
+    )
 
 
 def _extract_json(text: str) -> dict[str, Any]:
