@@ -65,7 +65,16 @@ def _run_one(
         "severity": d.severity,
         "would_block": d.would_block,
         "provider": d.provider,
-        "issues": [{"type": i.get("type"), "rule": i.get("rule"), "severity": i.get("severity")} for i in d.issues],
+        "issues": [
+            {
+                "type": i.get("type"),
+                "rule": i.get("rule"),
+                "severity": i.get("severity"),
+                # the claim itself, for label audits — dev only, like the summary
+                **({"message": str(i.get("message", ""))[:600]} if case["split"] == "dev" else {}),
+            }
+            for i in d.issues
+        ],
         "localized": case["label"] == "defect" and _localized(d, fix_files),
         "summary": d.summary if case["split"] == "dev" else "",
         "seconds": round(time.monotonic() - started, 1),

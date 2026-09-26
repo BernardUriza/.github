@@ -138,10 +138,10 @@
    "label": "clean",
    "base": "7fee1a4ff6bdbecccdb46a51b7cbbe2a5b2bc3bd",
    "head": "7725c58f068eb1e8f285a24945c3552c3a7f6232",
-   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it",
    "truth": "",
    "subject": "feat(host): el loop del host omnipresente — batch→route→dispatch atado y probado (#6 slice 3) [v4.22.64]",
-   "split": "heldout",
+   "split": "dev",
    "fix": ""
   },
   {
@@ -204,10 +204,10 @@
    "label": "clean",
    "base": "75ea5fe2f6f8cc4f420fa4ca0ac6e8d528c78b93",
    "head": "8effcfb1664b6366999806cbe8ecea8b87a02797",
-   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it",
    "truth": "",
    "subject": "feat(vision): la imagen deja huella — memoria longitudinal para lo visual [v4.26.0]",
-   "split": "heldout",
+   "split": "dev",
    "fix": ""
   },
   {
@@ -215,10 +215,10 @@
    "label": "clean",
    "base": "ad9e6e6eb62aa92bd7804acaf4b306cfa0d416e8",
    "head": "953f15e7ce67de761fbc60859c14a136d8c9b698",
-   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it",
    "truth": "",
    "subject": "Cut LLM costs ~50%: cache split, Haiku facts, triviality filter (v3.4.0)",
-   "split": "heldout",
+   "split": "dev",
    "fix": ""
   },
   {
@@ -263,6 +263,50 @@
    "truth": "",
    "subject": "PR #105 drop the base64 image path (clean data-plane)",
    "split": "dev",
+   "fix": ""
+  },
+  {
+   "id": "clean-0e37a95",
+   "label": "clean",
+   "split": "heldout",
+   "base": "eb4a3009d66577d43fe383cbfb5514ceb1d146d2",
+   "head": "0e37a9511aecfa208b4e57587cd6a18f3aaf3617",
+   "source": "seeded replacement (random.Random(43)), never blamed by SZZ",
+   "truth": "",
+   "subject": "Add Facts tab to dashboard — comprehensive user facts monitor (v2.0.0)",
+   "fix": ""
+  },
+  {
+   "id": "clean-8b66d9d",
+   "label": "clean",
+   "split": "heldout",
+   "base": "454db4cd05e843a1f41d205ad406541d5eae7c86",
+   "head": "8b66d9d3e860dddf82340ff91d6e2d0e042079a9",
+   "source": "seeded replacement (random.Random(43)), never blamed by SZZ",
+   "truth": "",
+   "subject": "feat(cli): moltbook-register subcommand (v3.7.18) [pivot.2]",
+   "fix": ""
+  },
+  {
+   "id": "clean-401331d",
+   "label": "clean",
+   "split": "heldout",
+   "base": "5de66cf7ea9512f6dad48f8d2a4e9ac935bafb73",
+   "head": "401331dff11a53f5412bb868815c40c5e20bd647",
+   "source": "seeded replacement (random.Random(43)), never blamed by SZZ",
+   "truth": "",
+   "subject": "refactor: extract COMMON_STOPWORDS shared core (v3.5.21)",
+   "fix": ""
+  },
+  {
+   "id": "clean-pr109",
+   "label": "clean",
+   "split": "dev",
+   "base": "3f96e849202d44afe9f3a7e5d8a6106db2e7bfdc",
+   "head": "24d5b9f6366ff8b6e8af74c086be74e50b3c9544",
+   "source": "PR #109 — BAIR (claude-opus-4-7) BLOCKed it for a hallucinated SyntaxError: `except A, B:` is valid on Python 3.14 (PEP 758) and the line predates the PR",
+   "truth": "",
+   "subject": "fix(agent_facts): persona bound by the server",
    "fix": ""
   }
  ]

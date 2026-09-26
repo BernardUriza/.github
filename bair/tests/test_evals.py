@@ -46,9 +46,10 @@ def test_packaged_cases_are_balanced_and_complete():
     spec = runner._load_cases(None)
     cases = spec["cases"]
     assert spec["repo"] == "BernardUriza/server-bot"
-    assert len(cases) == 24
-    for split in ("dev", "heldout"):
-        assert sum(c["split"] == split for c in cases) == 12
+    assert len({c["id"] for c in cases}) == len(cases)
+    # held-out stays balanced; dev grows as audited and hard cases join it
+    assert sum(c["split"] == "heldout" and c["label"] == "defect" for c in cases) == 6
+    assert sum(c["split"] == "heldout" and c["label"] == "clean" for c in cases) == 6
     for c in cases:
         assert len(c["base"]) == 40 and len(c["head"]) == 40
         assert (c["label"] == "defect") == bool(c["truth"])
@@ -102,6 +103,8 @@ def test_offline_end_to_end_through_worktrees(tmp_path, monkeypatch, capsys):
     assert all(diff_has_change for _, _, diff_has_change in seen)
     assert {r["context"] for r in rows} == {"full", "slice"}
     assert all(r["localized"] for r in rows if r["case"] == "defect-1")
+    assert all("message" in i for r in rows if r["split"] == "dev" for i in r["issues"])
+    assert all("message" not in i for r in rows if r["split"] == "heldout" for i in r["issues"])
     report = capsys.readouterr().out
     assert "defects BLOCKed" in report and "1/1" in report
     assert "Issues carrying a valid `rule`: 8/8" in report
