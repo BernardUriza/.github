@@ -243,7 +243,7 @@ def _call_claude_oauth(system: str, user: str, token: str, model: str | None = N
     if resp is None or resp.status_code != 200:
         raise RuntimeError("Claude OAuth: no successful response")
     data = resp.json()
-    text = data["content"][0]["text"]
+    text = _response_text(data)
     parsed = _extract_json(text)
     return GatekeepDecision(
         verdict=parsed.get("verdict", "WARN"),
@@ -276,7 +276,7 @@ def _call_anthropic(system: str, user: str, key: str, model: str | None = None) 
     if resp.status_code != 200:
         raise RuntimeError(f"Anthropic HTTP {resp.status_code}: {resp.text[:300]}")
     data = resp.json()
-    text = data["content"][0]["text"]
+    text = _response_text(data)
     parsed = _extract_json(text)
     return GatekeepDecision(
         verdict=parsed.get("verdict", "WARN"),
@@ -322,8 +322,21 @@ def _call_openai(system: str, user: str, key: str) -> GatekeepDecision:
     )
 
 
+def _response_text(data: dict[str, Any]) -> str:
+    """The text of a Messages API response: every ``text`` block joined. Models
+    with thinking always on (Claude Opus 5.5) put ``thinking`` blocks first, so
+    ``content[0]["text"]`` raised KeyError and the gate abstained (eval run
+    36209279458: 72/72 opus-5-5 reviews UNAVAILABLE)."""
+    text = "".join(b.get("text", "") for b in data.get("content") or [] if b.get("type") == "text")
+    if not text.strip():
+        raise ValueError(f"no text block in response (stop_reason={data.get('stop_reason')!r})")
+    return text
+
+
 def _extract_json(text: str) -> dict[str, Any]:
-    """Lenient JSON parse — strips ```json fences``` and trims whitespace."""
+    """Lenient JSON parse — strips ```json fences```, trims whitespace, and reads
+    the first JSON object, ignoring prose before or after it (1 of 72 opus-4-7
+    eval reviews failed with ``Extra data`` on trailing text)."""
     stripped = text.strip()
     if stripped.startswith("```"):
         # ```json ... ``` or ``` ... ```
@@ -333,7 +346,13 @@ def _extract_json(text: str) -> dict[str, Any]:
         if lines and lines[-1].startswith("```"):
             lines = lines[:-1]
         stripped = "\n".join(lines)
-    return json.loads(stripped)
+    start = stripped.find("{")
+    if start < 0:
+        raise ValueError("no JSON object in model output")
+    obj, _ = json.JSONDecoder().raw_decode(stripped, start)
+    if not isinstance(obj, dict):
+        raise ValueError("model output JSON is not an object")
+    return obj
 
 
 # -- Emit (comment + GITHUB_OUTPUT + exit code) ------------------------

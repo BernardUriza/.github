@@ -34,6 +34,7 @@ class _FakeResponse:
 _OK_PAYLOAD = {
     "content": [
         {
+            "type": "text",
             "text": '{"verdict": "APPROVE", "severity": "LOW", "summary": "ok", "issues": [], "recommendation": ""}'
         }
     ]
