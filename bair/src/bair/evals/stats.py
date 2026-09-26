@@ -61,6 +61,7 @@ def summarize(rows: list[dict]) -> dict[str, dict]:
         false_alarm = [c for c in cleans if per_case[c][0] in ("BLOCK", "WARN")]
         flips = [c for c, (_, flipped) in per_case.items() if flipped]
         located = [c for c in defects if any(r.get("localized") for r in cases[c])]
+        localizable = [c for c in defects if any(r.get("localized") is not None for r in cases[c])]
         out[ctx] = {
             "per_case": per_case,
             "defects": len(defects),
@@ -71,6 +72,7 @@ def summarize(rows: list[dict]) -> dict[str, dict]:
             "false_alarm": false_alarm,
             "flips": flips,
             "localized": located,
+            "localizable": len(localizable),
             "unavailable": [c for c, (v, _) in per_case.items() if v == "UNAVAILABLE"],
         }
     return out

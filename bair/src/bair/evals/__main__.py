@@ -75,7 +75,9 @@ def _run_one(
             }
             for i in d.issues
         ],
-        "localized": case["label"] == "defect" and _localized(d, fix_files),
+        # None when there is nothing to localize against: clean cases, and latent
+        # defects (found by the suite, no fix commit yet).
+        "localized": _localized(d, fix_files) if case["label"] == "defect" and fix_files else None,
         "summary": d.summary if case["split"] == "dev" else "",
         "seconds": round(time.monotonic() - started, 1),
     }
@@ -108,7 +110,7 @@ def _report(rows: list[dict], meta: dict) -> str:
         for ctx, s in sorted(summary.items()):
             lines.append(
                 f"| {ctx} | {_fmt_rate(len(s['blocked']), s['defects'])} | {_fmt_rate(len(s['flagged']), s['defects'])} | "
-                f"{len(s['localized'])}/{s['defects']} | {_fmt_rate(len(s['false_block']), s['cleans'])} | "
+                f"{len(s['localized'])}/{s['localizable']} | {_fmt_rate(len(s['false_block']), s['cleans'])} | "
                 f"{_fmt_rate(len(s['false_alarm']), s['cleans'])} | {len(s['flips'])} | {len(s['unavailable'])} |"
             )
         ctxs = sorted(summary)

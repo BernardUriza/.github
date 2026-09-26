@@ -61,10 +61,9 @@ Mixing phases (e.g., a "gatherer" that also formats a prompt) is a code smell �
 
 | Pipeline | Decorator | Status |
 |----------|-----------|--------|
-| `gatekeep` | ✅ `@command("gatekeep")` | LIVE in production on free-intelligence |
-| `changelog` | ❌ legacy `run_changelog(container, cfg)` | Not registered yet |
-| `review`, `claude_review` | ❌ legacy `run_review_*` | Not registered yet |
-| `retro` | ❌ legacy `run_retro` | Not registered yet |
-| `preflight`, `remedy`, `resolve`, `revert`, `issue_rank` | ❌ legacy | Not registered yet |
+| `gatekeep` | ✅ `@command("gatekeep")` | LIVE on server-bot and free-intelligence |
 
-When a legacy pipeline gets wired into a workflow, decorate-as-you-wire — add `@command("name")` + the `__init__.py` line, do NOT bulk-register all legacy pipelines at once. Bulk decoration would expose unfinished migration work.
+The legacy pipelines (`changelog`, `review`, `retro`, `preflight`, `remedy`, …) were
+deleted in #6/#7 — they were never registered. A new pipeline starts from the
+canonical shape above; `gatekeep.review()` is the reference for keeping the verdict
+path pure enough that an eval suite can call it (see `bair/src/bair/evals/`).

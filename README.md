@@ -1,48 +1,30 @@
 # BernardUriza/.github
 
-Org-level shared infrastructure for Bernard's repositories.
+Home of **bair**, the BAIR Gatekeeper: an AI pull-request gate that reviews every PR of a consumer repo with Claude and returns APPROVE / WARN / BLOCK (only BLOCK fails the check).
 
 ## What lives here
 
 ```
-.github/workflows/   reusable GitHub Actions workflows (workflow_call)
-                     called as: uses: BernardUriza/.github/.github/workflows/<name>.yml@main
-bair/                thin consumer of xair, wired against Bernard's ecosystem
-                     ├── frontend/   dashboard (Brython + ApexCharts)
-                     └── src/bair/   pipelines, prompts, gatherers
+bair/                 the gatekeeper (thin consumer of xair)
+├── src/bair/         pipelines/gatekeep.py, gatherers/, prompts/, evals/
+└── tests/
+.github/workflows/    smoke-test-anaconda-consumption.yml (fi-core / fi-runner / xair)
+.claude/backlog/      the gate's calibration log
 ```
 
-## How target repos use it
+## How a repo uses the gate
 
-A target repo (e.g. `free-intelligence`, `insult`, `alice`) drops a
-`.github/workflows/ai-commands.yml` passthrough:
+Copy [server-bot's `ai-gatekeep.yml`](https://github.com/BernardUriza/server-bot/blob/main/.github/workflows/ai-gatekeep.yml) into the consumer repo, add the secrets `BAIR_APP_ID`, `BAIR_APP_PRIVATE_KEY` and `CLAUDE_CODE_OAUTH_TOKEN`, and install the [BAIR GitHub App](https://github.com/apps/bair-gatekeeper). The workflow installs bair from `main` and runs `python -m bair gatekeep`; the verdict lands as a PR comment from `bair-gatekeeper[bot]`.
 
-```yaml
-name: AI Commands
-on:
-  pull_request_review_comment:
-    types: [created]
-  issue_comment:
-    types: [created]
-  workflow_dispatch:
+(There is no reusable `workflow_call` here: calling it cross-repo trips `startup_failure`, so each consumer inlines the ~30 lines.)
 
-jobs:
-  ai-review:
-    if: contains(github.event.comment.body, '/ai-review')
-    uses: BernardUriza/.github/.github/workflows/ai-review.yml@main
-    secrets: inherit
-```
+## How the gate is tuned
 
-All logic (model selection, prompts, secret names, channels) lives here.
-Updating a prompt or swapping a model means one push to this repo; no
-fan-out PRs across N target repos.
+By measurement, not by feel: `python -m bair.evals` replays labelled commits from a consumer's history (real regressions found with SZZ, plus clean commits) through the same code path the live gate uses, and reports catch rate, false BLOCKs and verdict flips with Wilson intervals. See `CLAUDE.md` and `.claude/backlog/01-the-gate-has-never-said-no.md`.
 
 ## Relationship to xair
 
-[xair](https://github.com/BernardUriza/xair) is the generic OSS framework
-(pip-installable). `bair/` here is the **instance** — Bernard's
-configuration of xair, with custom pipelines, prompts, gatherers, and the
-frontend dashboard.
+[xair](https://github.com/BernardUriza/xair) is the generic framework (command registry, container, GitHub client). `bair` is Bernard's instance of it.
 
 ## License
 

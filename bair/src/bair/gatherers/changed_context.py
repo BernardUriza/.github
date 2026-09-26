@@ -4,16 +4,20 @@ what the change feeds.
 A hunk shows the lines that changed, not the code that reads their result. In
 server-bot#104 (backlog 01, 2026-09-25) an ``all`` → ``any`` flip in ``_payload``
 made a stored row crash ``_expired`` on resume; ``_expired`` lives in the same
-file, outside the hunk, and the gatekeeper never saw it. This gatherer adds two
-things to the review payload, both read from the PR-head checkout:
+file, outside the hunk, and the gatekeeper never saw it. This gatherer adds the
+code the change feeds to the review payload, read from the PR-head checkout, in one
+of three modes (``BAIR_CONTEXT``, default ``slice`` — chosen by the eval suite):
 
-  - the full post-change text of every file the diff touches (``FILE: <path>``);
-  - the call sites of every function the diff touches, across the repo
-    (``CALLERS OF <name>``), found with ``git grep``.
+  - ``slice``: function bodies along the data flow — the functions enclosing each
+    changed line, their callers, the same-module functions that touch the data
+    keys the hunks touch, and one hop into same-file helpers (``FUNCTION ...``);
+  - ``full``: the full post-change text of every touched file (``FILE: <path>``)
+    plus ``git grep`` call sites of every changed function (``CALLERS OF <name>``);
+  - ``none``: nothing.
 
-Bounded by a per-file and a total byte budget, source files before tests. Fail-soft:
-no checkout, no git, or nothing readable returns ``""`` and the review falls back
-to the diff alone. Pure stdlib (no xair) so it is unit-testable in isolation.
+Bounded by byte budgets, source before tests. Fail-soft: no checkout, no git, or
+nothing readable returns ``""`` and the review falls back to the diff alone. Pure
+stdlib (no xair) so it is unit-testable in isolation.
 """
 
 from __future__ import annotations

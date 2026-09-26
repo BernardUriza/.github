@@ -334,3 +334,13 @@ hallucination (PEP 758).
 Next experiment (prompt, not model): demote "uncertain reader" and "untested
 data-plane change" from CRITICAL to HIGH (WARN), keep CRITICAL for a concrete,
 cited data-loss/crash path; rerun 4-7 vs 5-5 on this held-out.
+
+## Housekeeping (2026-09-26)
+
+- Docs rewritten against the real tree (`CLAUDE.md`, `README.md`, `bair/README.md`,
+  `pipeline-pattern.md`); `frontend-brython.md` deleted (the frontend went in #7).
+- Dead reusable `.github/workflows/ai-gatekeep.yml` deleted — unused (cross-repo
+  `workflow_call` breaks) and diverged (no OAuth); server-bot's copy is canonical.
+- OAuth call: timeouts/transport errors retried like a 429, timeout 60 → 180 s.
+- Eval: `localized` is n/a (None) for latent defects instead of a miss.
+- server-bot planted-defect branches deleted (#102–#104 keep their history).

@@ -7,8 +7,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from bair.evals import __main__ as runner
 from bair.evals.stats import discordant, majority, summarize, wilson
 from bair.pipelines import gatekeep
@@ -67,7 +65,8 @@ def test_offline_end_to_end_through_worktrees(tmp_path, monkeypatch, capsys):
     git("config", "user.email", "t@t")
     git("config", "user.name", "t")
     (repo / "m.py").write_text("def f(x):\n    return all(x)\n")
-    git("add", "-A"); git("commit", "-qm", "base")
+    git("add", "-A")
+    git("commit", "-qm", "base")
     base = git("rev-parse", "HEAD")
     (repo / "m.py").write_text("def f(x):\n    return any(x)\n")
     git("commit", "-qam", "intro")
@@ -121,7 +120,8 @@ def test_an_unreachable_case_costs_that_case_not_the_run(tmp_path, monkeypatch, 
     git("config", "user.email", "t@t")
     git("config", "user.name", "t")
     (repo / "m.py").write_text("def f():\n    return 1\n")
-    git("add", "-A"); git("commit", "-qm", "base")
+    git("add", "-A")
+    git("commit", "-qm", "base")
     base = git("rev-parse", "HEAD")
     (repo / "m.py").write_text("def f():\n    return 2\n")
     git("commit", "-qam", "change")
@@ -143,3 +143,12 @@ def test_an_unreachable_case_costs_that_case_not_the_run(tmp_path, monkeypatch, 
     gone_rows = [r for r in rows if r["case"] == "clean-gone"]
     assert len(gone_rows) == 2 and all(r["verdict"] == "UNAVAILABLE" and r["error"].startswith("setup:") for r in gone_rows)
     assert "| 1 |" in capsys.readouterr().out  # reported in the unavailable column
+
+
+def test_localization_is_not_counted_for_latent_defects():
+    rows = [
+        {"case": "d-fixed", "label": "defect", "context": "c", "verdict": "BLOCK", "localized": True},
+        {"case": "d-latent", "label": "defect", "context": "c", "verdict": "BLOCK", "localized": None},
+    ]
+    s = summarize(rows)["c"]
+    assert s["localized"] == ["d-fixed"] and s["localizable"] == 1

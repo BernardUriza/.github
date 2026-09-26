@@ -1,133 +1,79 @@
 # BernardUriza/.github · Quick Reference
 
-**Hosts Bernard's org-wide GitHub artifacts:** the `bair` thin consumer of [xair](https://github.com/BernardUriza/xair), reusable GitHub Actions workflows that consumer repos call via `workflow_call`, and the BAIR Gatekeeper Brython + ApexCharts dashboard.
+**Hosts `bair`**, the BAIR Gatekeeper: a thin consumer of [xair](https://github.com/BernardUriza/xair) that reviews every PR of a consumer repo with Claude and returns APPROVE / WARN / BLOCK. Only BLOCK fails the check.
 
 **Owner:** Bernard Uriza Orozco
-**Repo:** https://github.com/BernardUriza/.github
-**Active in production:** BAIR Gatekeeper pipeline running on [BernardUriza/free-intelligence](https://github.com/BernardUriza/free-intelligence) since 2026-05-27.
+**Repo:** https://github.com/BernardUriza/.github (PUBLIC)
+**Live on:** [server-bot](https://github.com/BernardUriza/server-bot) (`.github/workflows/ai-gatekeep.yml`) and [free-intelligence](https://github.com/BernardUriza/free-intelligence) (`pr-gate.yml`). Consumers `pip install` bair from `main`, so **a push to `main` here is a deploy to every consumer's next PR.**
 
 ---
 
 ## 🚀 Quick Start
 
 ```bash
-# Install bair locally (depends on xair from git)
-cd bair
-pip install -e .
-
-# Run a pipeline manually (gatekeep is the only registered command today)
-python -m bair gatekeep
+cd bair && pip install -e ".[test]"   # pulls xair from git main
+python -m pytest                      # offline, no LLM calls
+python -m bair gatekeep               # needs REPO, PR_NUM, BASE_SHA, HEAD_SHA + a Claude credential
 ```
 
-`bair` reads its trigger options from env (`PR_NUM`, `REPO`, `BASE_SHA`, `HEAD_SHA`, `ANTHROPIC_API_KEY`, `GH_TOKEN`) — the GitHub Actions workflow in the consumer repo sets these and calls `python -m bair <cmd>`.
+Credentials, in the order the gate tries them: `CLAUDE_CODE_OAUTH_TOKEN` (Max pool, preferred) → `ANTHROPIC_API_KEY` → `OPENAI_API_KEY`. None answering → the gate **abstains out loud** (comment + exit 0), never blocks on infrastructure.
 
 ---
 
 ## 📚 Layout
 
 ```
-.github/workflows/         # reusable workflows callable from any repo
-└── ai-gatekeep.yml        # workflow_call entry for BAIR Gatekeeper
-                           # (TEMPORARILY UNUSED — consumers inline the same
-                           # steps because cross-repo workflow_call trips
-                           # startup_failure; see free-intelligence pr-gate.yml)
-
-bair/                      # the BAIR consumer of the X-AIR pattern
-├── pyproject.toml
-├── src/bair/
-│   ├── __init__.py
-│   ├── __main__.py        # python -m bair <cmd> → xair.dispatch
-│   ├── pipelines/
-│   │   ├── __init__.py    # side-effect imports → @command registrations
-│   │   ├── gatekeep.py    # the LIVE gatekeeper (BLOCK/WARN/APPROVE)
-│   │   ├── changelog.py   # legacy (not @command-decorated yet)
-│   │   ├── review.py      # legacy
-│   │   ├── retro.py       # legacy
-│   │   └── ...
-│   ├── prompt/            # pipeline-specific prompt formatters
-│   ├── config/            # per-pipeline frozen dataclasses
-│   ├── domain/            # consumer-specific models (CSS analyzer, etc.)
-│   ├── gatherers/         # consumer-specific gatherers (deep_analysis, etc.)
-│   ├── stages/            # composable Pipeline stages
-│   ├── tools/             # backfill / snapshot / validate utilities
-│   ├── services/          # changelog deliverers, local_runner
-│   └── ...
-└── frontend/              # Brython + ApexCharts observability dashboard
-    ├── index.html
-    ├── observability.html
-    ├── css/, img/, js/
-    ├── py/                # Brython app modules (run IN THE BROWSER)
-    └── diagrams/          # static HTML pipeline diagrams
+bair/src/bair/
+├── __main__.py                python -m bair <cmd> → xair.dispatch
+├── pipelines/
+│   ├── __init__.py            side-effect imports → @command registrations
+│   └── gatekeep.py            @command("gatekeep") + review(): the shared verdict path
+├── gatherers/
+│   ├── repo_rules.py          target repo's .claude rules + curated playbook rules
+│   └── changed_context.py     code around the diff (BAIR_CONTEXT = slice | full | none)
+├── prompts/
+│   └── gatekeep_system.md     the system prompt (content, not code)
+└── evals/                     python -m bair.evals — the eval suite
+    ├── cases_server_bot.json  labelled (base, head) cases from server-bot history
+    ├── __main__.py            runner: worktree per case, JSONL rows, report
+    └── stats.py               majority verdict, Wilson intervals, discordance
+.claude/backlog/               01 = the gate's calibration log (receipts, decisions)
 ```
 
----
+## 🛡️ How a verdict is made (`gatekeep.review`)
 
-## 🎯 Core Principles
+1. **Context:** repo rules + playbook rules + `changed_context` (default `slice`: function bodies along the data flow — changed functions, callers, same-module readers of the hunk's data keys, one hop into helpers).
+2. **LLM:** `_call_llm` → Claude (default `claude-opus-4-7`, override `BAIR_GATEKEEP_MODEL`) → `_normalize` (validated verdict/severity/issues).
+3. **Floor:** the verdict never sits below its worst issue (CRITICAL → BLOCK, HIGH → ≥ WARN).
+4. **Shadow:** a BLOCK resting only on issues with `rule: data_plane` exits as WARN with `would_block=true`. Promotion = emptying `_SHADOW_RULES`, only on eval evidence.
+5. **Exit:** 1 only on BLOCK.
 
-1. **bair extends xair via the registry pattern.** Pipelines self-register with `@command("name")`; the dispatcher in xair routes by name. → [rules/pipeline-pattern.md](.claude/rules/pipeline-pattern.md)
-2. **Frontend is Brython, not JavaScript.** Logic lives under `frontend/py/`; the `<script type="text/python">` tag runs it in the browser. → [rules/frontend-brython.md](.claude/rules/frontend-brython.md)
-3. **No secrets in this repo.** Secrets (`BAIR_APP_ID`, `BAIR_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY`) live in CONSUMER repos' Actions secrets, never in code or workflow YAML literals.
+The live gate and the eval suite call the **same** `review()` — change it and the suite measures exactly what ships.
 
----
+## 🧪 Changing the gate = measuring it
 
-## 🏗️ Adding a Pipeline
+Any change to the prompt, the model, the context or the verdict logic is decided by the eval suite, never by one PR:
 
-1. Write `bair/src/bair/pipelines/<name>.py` with handler decorated `@command("<name>")` from `xair.command_registry`
-2. Add `from . import <name>  # noqa: F401  # pyright: ignore[reportUnusedImport]` to `bair/src/bair/pipelines/__init__.py`
-3. Wire from a CONSUMER repo's workflow YAML — call `python -m bair <name>` with required env (`PR_NUM`, `REPO`, `BASE_SHA`, `HEAD_SHA`, plus pipeline-specific keys)
-4. Commit + push. No PyPI publish needed; consumer pip-installs from `git+https://github.com/BernardUriza/.github@main#subdirectory=bair`.
+- **Where it runs:** server-bot branch `bair-eval`, workflow `.github/workflows/bair-eval.yml` (push to that branch triggers it; nothing touches main/CI/CD). Edit `EVAL_ARGS` there, push an empty commit, read the job summary + the `bair-eval-jsonl` artifact.
+- **Protocol:** fix the decision rule BEFORE the run; decide on **held-out** only; dev may be read case by case, held-out only in aggregate (a held-out case you read moves to dev and gets replaced).
+- **Labels:** defects come from SZZ (blame the lines each `fix` commit changed) verified by hand; a "clean" case the gate flags gets audited — a real bug becomes a *latent* defect, not a false positive.
+- Full log, numbers and open decisions: `.claude/backlog/01-the-gate-has-never-said-no.md`.
 
 ---
 
 ## 🚫 Critical Rules
 
-### bair imports from xair, NOT the other way around
-
-```python
-# ✅ Pipeline imports the framework
-from xair.command_registry import command, CommandContext
-from xair.infra.container import Container
-```
-
-```python
-# ❌ Don't make xair depend on bair (would force circular)
-# xair MUST stay framework-only — see xair/.claude/rules/framework-genericity.md
-```
-
-### Side-effect imports in `pipelines/__init__.py` are mandatory
-
-Without them, `@command("name")` decorators never run, the registry stays empty, `python -m bair <cmd>` returns "unknown command". Every new pipeline MUST add one line to `__init__.py`.
-
-### Frontend is Brython
-
-```html
-<!-- ✅ Browser runs the Python directly -->
-<script type="text/python" src="py/app.py"></script>
-```
-
-Do NOT translate Brython to JS to "modernize". The frontend was deliberately kept in Python so the entire BAIR stack speaks one language.
-
-### Cross-repo reusable workflow currently broken
-
-`workflow_call` from another repo to `BernardUriza/.github/.github/workflows/ai-gatekeep.yml@main` trips `startup_failure` for reasons not fully diagnosed (see free-intelligence pr-gate.yml history, commits `42f30778` + `5de1c2b5`). Until resolved, **inline the workflow steps** in each consumer's repo instead of `uses:` the reusable. ~30 LOC of duplication is an acceptable trade vs the cross-repo opacity.
-
----
-
-## 🔗 Related
-
-- [xair](https://github.com/BernardUriza/xair) — the framework bair depends on
-- [free-intelligence](https://github.com/BernardUriza/free-intelligence) — first repo running the BAIR Gatekeeper via App-token integration
-- BAIR GitHub App: https://github.com/apps/bair-gatekeeper (id `3878034`, installation `135930809` on free-intelligence)
-- BAIR logo: morado neural network — designed in Gemini, lives on the App page
-
----
+- **bair imports xair, never the reverse.** xair stays framework-only.
+- **Every `@command` needs its side-effect import** in `pipelines/__init__.py`, and the decorator must sit directly on the handler — `tests/test_gatekeep_registration.py` pins `get_handler("gatekeep") is gatekeep.gatekeep` (a helper once got inserted between them and every consumer's gate crashed).
+- **No secrets here.** They live in consumer repos' Actions secrets. See `.claude/rules/secrets-handling.md`.
+- **Consumers inline the workflow.** Cross-repo `workflow_call` trips `startup_failure`, so there is no reusable workflow here; the canonical template is server-bot's `.github/workflows/ai-gatekeep.yml` (OAuth + App token + `python -m bair gatekeep`).
 
 ## 🏷️ Conventions
 
-- **Commits:** Conventional Commits (`feat/fix/docs/chore/test/refactor`)
-- **Branches:** push directly to `main`. No PR workflow set up here yet (this repo doesn't run its own CI).
-- **Language:** English in `.claude/rules/*.md` per the cross-project rule.
+- **Commits:** Conventional Commits. **Branches:** push directly to `main` (no CI here — run `pytest` before pushing, it IS the deploy).
+- **Language:** English in `.claude/rules/*.md`.
 
----
+## 🔗 Related
 
-For deeper documentation, browse [`.claude/rules/`](.claude/rules/).
+- [xair](https://github.com/BernardUriza/xair) — the framework
+- BAIR GitHub App: https://github.com/apps/bair-gatekeeper (id `3878034`)

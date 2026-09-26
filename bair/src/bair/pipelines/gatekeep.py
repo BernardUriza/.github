@@ -1,39 +1,24 @@
-"""Gatekeep pipeline — replaces the broken FI AI Gatekeeper.
+"""Gatekeep pipeline — the BAIR Gatekeeper: review a PR with Claude, gate the merge.
 
-The original ``ai-gatekeeper`` job in ``free-intelligence/.github/workflows/
-pr-gate.yml`` was failing OPEN on every PR since at least 2026-05-26:
-Azure OpenAI returned 401 (invalid subscription key) and the workflow
-defaulted ``VERDICT=APPROVE``. Result: green status check + zero actual
-review. The fail-open silence was strictly worse than no gatekeeper at
-all, because the green checkmark misled human review.
+Flow (``review``): repo + playbook rules, ``changed_context`` (the code the diff
+feeds), one LLM call, ``_normalize`` (validated JSON), ``_floor_verdict`` (a
+verdict never below its worst issue), ``_shadow`` (data-plane BLOCKs held to WARN
++ ``would_block`` until the eval suite promotes them). ``gatekeep`` wraps it for
+CI: posts the comment, writes $GITHUB_OUTPUT, exits 1 only on BLOCK. The eval suite
+(``bair.evals``) calls the same ``review``, so it measures exactly what ships.
 
-This pipeline fixes the failure modes the broken Gatekeeper revealed:
+Failure modes it exists to avoid (history in BernardUriza/.github backlog 01):
 
-  - **No quota → no power (2026-09-08).** If every provider fails (429
-    on the shared Max pool, a dead key, no key at all) the pipeline
-    ABSTAINS: it posts a loud comment naming each provider's failure
-    and exits 0. A reviewer with no model has no opinion, and blocking
-    the merge on infrastructure is not a review. The one thing that
-    still exits 1 is a real BLOCK verdict — and a miswired caller
-    (missing REPO/PR_NUM/SHAs), which is a bug, not a quota.
-    What made the old fail-open dangerous was the SILENCE (a green
-    check + no comment); the abstention is explicit, so it cannot be
-    mistaken for approval.
-  - **Multi-provider fallback.** Tries Anthropic first (cheaper +
-    reliable), then OpenAI (Azure or direct), then a stub that always
-    posts the unavailability comment. The user provides whichever key
-    they have; the pipeline picks automatically.
-  - **Always post a comment.** Even on APPROVE — the PR author sees the
-    verdict + summary inline, not just an opaque CI status badge.
+  - **Silent approval.** The predecessor in free-intelligence failed OPEN on a
+    401 for weeks: green check, zero review. Every run here posts a comment.
+  - **Blocking on infrastructure.** Providers are tried in order — Claude OAuth
+    (Max pool, transient 429/5xx/timeouts retried with backoff), Anthropic key,
+    OpenAI — and if none answers the gate ABSTAINS out loud (exit 0).
+  - **Trusting the model's JSON.** A lowercase or invented verdict once exited 0
+    and a null severity crashed the gate with no comment; ``_normalize`` closes it.
 
-Wire it from a reusable workflow at
-``BernardUriza/.github/.github/workflows/ai-gatekeep.yml``; target repos
-call it as ``uses: BernardUriza/.github/.github/workflows/ai-gatekeep.yml@main``.
-
-Eval set: piggyback on ``free-intelligence/apps/packages/fi-runner/
-benchmarks/eval_guards.py`` (38 labeled cases, F1=1.000 on the current
-runner). When a follow-up adds an eval set for the gatekeep prompt
-itself, store labels at ``bair/eval/gatekeep_cases.json``.
+Consumers inline the workflow (cross-repo ``workflow_call`` trips
+``startup_failure``); the canonical copy is server-bot's ``ai-gatekeep.yml``.
 """
 
 from __future__ import annotations
@@ -185,6 +170,7 @@ _RETRYABLE_STATUSES = {429, 500, 502, 503, 529}
 _OAUTH_MAX_ATTEMPTS = 4
 _OAUTH_BACKOFF_BASE_S = 60
 _OAUTH_RETRY_AFTER_CAP_S = 300
+_OAUTH_TIMEOUT_S = 180  # thinking models (Opus 5.5: median 17 s on the eval) on large contexts
 
 
 def _call_claude_oauth(system: str, user: str, token: str, model: str | None = None) -> GatekeepDecision:
@@ -198,8 +184,8 @@ def _call_claude_oauth(system: str, user: str, token: str, model: str | None = N
     The Max account is a POOL shared with the owner's live sessions and
     runtimes, so a 429 here usually means transient contention, not a dead
     credential — and a CI batch job can afford to wait it out. Retries
-    429/5xx/529 with exponential backoff + jitter, honoring ``retry-after``
-    when sane. Non-retryable statuses (401, 403, 400) raise immediately so
+    429/5xx/529, timeouts and transport errors with exponential backoff + jitter,
+    honoring ``retry-after`` when sane. Non-retryable statuses (401, 403, 400) raise immediately so
     _call_llm fails closed without burning runner minutes."""
     import httpx
     import random
@@ -207,37 +193,45 @@ def _call_claude_oauth(system: str, user: str, token: str, model: str | None = N
 
     resp = None
     for attempt in range(_OAUTH_MAX_ATTEMPTS):
-        resp = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "anthropic-beta": "oauth-2025-04-20",
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": _claude_model(model),
-                "max_tokens": 4000,
-                "system": [
-                    {"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
-                    {"type": "text", "text": system},
-                ],
-                "messages": [{"role": "user", "content": user}],
-            },
-            timeout=60,
-        )
-        if resp.status_code == 200:
-            break
-        if resp.status_code not in _RETRYABLE_STATUSES or attempt == _OAUTH_MAX_ATTEMPTS - 1:
-            raise RuntimeError(f"Claude OAuth HTTP {resp.status_code}: {resp.text[:300]}")
-        retry_after = resp.headers.get("retry-after", "")
+        try:
+            resp = httpx.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "anthropic-beta": "oauth-2025-04-20",
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": _claude_model(model),
+                    "max_tokens": 4000,
+                    "system": [
+                        {"type": "text", "text": "You are Claude Code, Anthropic's official CLI for Claude."},
+                        {"type": "text", "text": system},
+                    ],
+                    "messages": [{"role": "user", "content": user}],
+                },
+                timeout=_OAUTH_TIMEOUT_S,
+            )
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            # A network hiccup or a slow thinking model is as transient as a 429.
+            resp = None
+            if attempt == _OAUTH_MAX_ATTEMPTS - 1:
+                raise RuntimeError(f"Claude OAuth transport error: {type(exc).__name__}: {exc}") from exc
+            status = type(exc).__name__
+        else:
+            if resp.status_code == 200:
+                break
+            if resp.status_code not in _RETRYABLE_STATUSES or attempt == _OAUTH_MAX_ATTEMPTS - 1:
+                raise RuntimeError(f"Claude OAuth HTTP {resp.status_code}: {resp.text[:300]}")
+            status = f"HTTP {resp.status_code}"
+        retry_after = resp.headers.get("retry-after", "") if resp is not None else ""
         if retry_after.isdigit() and int(retry_after) <= _OAUTH_RETRY_AFTER_CAP_S:
             wait = int(retry_after)
         else:
             wait = random.uniform(0, min(_OAUTH_BACKOFF_BASE_S * (2 ** attempt), _OAUTH_RETRY_AFTER_CAP_S))
         logger.warning(
-            f"Claude OAuth HTTP {resp.status_code} (attempt {attempt + 1}/{_OAUTH_MAX_ATTEMPTS}), "
-            f"retrying in {wait:.0f}s"
+            f"Claude OAuth {status} (attempt {attempt + 1}/{_OAUTH_MAX_ATTEMPTS}), retrying in {wait:.0f}s"
         )
         time.sleep(wait)
     if resp is None or resp.status_code != 200:

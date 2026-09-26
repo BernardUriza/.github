@@ -1,38 +1,32 @@
-# bair — Bernard's AI Reviewer
+# bair — the BAIR Gatekeeper
 
-Thin consumer of [xair](https://github.com/BernardUriza/xair). Wires the
-generic X-AIR framework against Bernard's ecosystem (free-intelligence,
-fi-core, fi-runner, insult, alice, ferboli, aurity, claude-code-notifications,
-bernard-blog).
+Thin consumer of [xair](https://github.com/BernardUriza/xair): one command, `gatekeep`, that reviews a pull request with Claude and gates the merge, plus the eval suite that decides how it is tuned.
 
 ## Layout
 
 ```
 bair/
-├── pyproject.toml      # depends on xair @ git+…
+├── pyproject.toml            depends on xair @ git+…
 ├── src/bair/
-│   ├── __main__.py     # `python -m bair <cmd>` → xair.dispatch
-│   ├── pipelines/      # Bernard-specific commands (extend xair base)
-│   ├── prompts/        # tone/context overrides
-│   └── gatherers/      # readers for FI-specific data sources
-└── frontend/           # Brython + ApexCharts dashboard (inherited from VAIR pattern)
+│   ├── __main__.py           python -m bair <cmd> → xair.dispatch
+│   ├── pipelines/gatekeep.py @command("gatekeep") + review()
+│   ├── gatherers/            repo_rules.py, changed_context.py
+│   ├── prompts/              gatekeep_system.md
+│   └── evals/                python -m bair.evals (cases, runner, stats)
+└── tests/                    offline, no LLM calls
 ```
 
 ## Usage
 
-The repo `BernardUriza/.github` hosts reusable GitHub Actions workflows in
-`.github/workflows/ai-*.yml` that call `python -m bair <command>` against a
-target repo's checkout. Target repos add a 12-line passthrough at
-`.github/workflows/ai-commands.yml` with `uses:` + `secrets: inherit`.
-
-See the parent repo `README.md` for the per-target wiring template.
-
-## Local install
-
 ```bash
-pip install -e bair/
-python -m bair --help
+pip install -e ".[test]"
+python -m pytest
+
+# the gate (what a consumer's workflow runs)
+REPO=owner/repo PR_NUM=1 BASE_SHA=… HEAD_SHA=… python -m bair gatekeep
+
+# the eval suite, from a full-history checkout of the cases' repo
+python -m bair.evals --repo-dir ../server-bot --runs 3 --context slice --models claude-opus-4-7
 ```
 
-Pulls xair from GitHub main; expect the lock to evolve until xair tags a
-release.
+Knobs: `BAIR_GATEKEEP_MODEL` (Claude model), `BAIR_CONTEXT` (`slice` default, `full`, `none`).

@@ -103,3 +103,29 @@ def test_sustained_429_exhausts_and_fails_closed(monkeypatch, no_sleep):
         gatekeep._call_claude_oauth("sys", "user", "tok")
     assert len(calls) == gatekeep._OAUTH_MAX_ATTEMPTS
     assert len(no_sleep) == gatekeep._OAUTH_MAX_ATTEMPTS - 1
+
+
+def test_a_transport_error_is_retried_like_a_429(monkeypatch, no_sleep):
+    calls: list[int] = []
+
+    def fake_post(url, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("slow thinking model")
+        if len(calls) == 2:
+            raise httpx.ConnectError("network hiccup")
+        return _FakeResponse(200, _OK_PAYLOAD)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    assert gatekeep._call_claude_oauth("sys", "user", "tok").verdict == "APPROVE"
+    assert len(calls) == 3 and len(no_sleep) == 2
+
+
+def test_a_transport_error_on_every_attempt_fails_with_a_named_reason(monkeypatch, no_sleep):
+    def always_down(url, **kwargs):
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(httpx, "post", always_down)
+    with pytest.raises(RuntimeError, match="transport error: ConnectError"):
+        gatekeep._call_claude_oauth("sys", "user", "tok")
+    assert len(no_sleep) == gatekeep._OAUTH_MAX_ATTEMPTS - 1
