@@ -393,7 +393,6 @@ def _post_comment(container: Container, repo: str, pr_num: str, body: str) -> No
         logger.warning(f"PR comment post failed: {exc}")
 
 
-@command("gatekeep")
 def review(
     diff: str, root: str, repo: str, pr_num: str, context_mode: str | None = None, model: str | None = None
 ) -> GatekeepDecision:
@@ -426,6 +425,7 @@ def review(
     return _shadow(_floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg, model=model)))
 
 
+@command("gatekeep")
 def gatekeep(ctx: CommandContext, container: Container) -> None:
     """The gatekeep pipeline. Called by ai-gatekeep.yml on every PR.
 
