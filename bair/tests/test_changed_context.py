@@ -88,3 +88,62 @@ def test_the_block_sits_right_before_the_diff():
     msg = _build_user_msg("THE-DIFF", "", "o/r", "1", code_context="<changed_code_context>X</changed_code_context>")
     assert msg.index("<changed_code_context>") < msg.index("DIFF:\n\nTHE-DIFF")
     assert "Changed-code context" not in _build_user_msg("THE-DIFF", "", "o/r", "1")
+
+
+# -- slice mode: function bodies along the data flow, not whole files --------------
+
+SLICE_DIFF = """\
+diff --git a/pkg/jobs.py b/pkg/jobs.py
+--- a/pkg/jobs.py
++++ b/pkg/jobs.py
+@@ -1,6 +1,6 @@
+ def _payload(req):
+     data = {}
+-    if all(req):
++    if any(req):
+         data["attachments"] = req
+     return data
+"""
+
+
+def _slice_repo(tmp_path: Path) -> Path:
+    files = {
+        "pkg/jobs.py": (
+            "def _payload(req):\n    data = {}\n    if any(req):\n        data[\"attachments\"] = req\n    return data\n\n\n"
+            "def _expired(blocks):\n    return blocks[0]['source']['url']\n\n\n"
+            "def resume(row):\n    return _expired(row.get(\"attachments\"))\n\n\n"
+            "def unrelated():\n    return 42\n"
+        ),
+        "pkg/runner.py": "from pkg.jobs import _payload\n\n\ndef submit(req):\n    return _payload(req)\n",
+        "tests/test_other.py": "def _payload():\n    return {}\n",
+    }
+    for rel, body in files.items():
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(body, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    return tmp_path
+
+
+def test_slice_follows_the_data_to_its_readers(tmp_path):
+    block = cc.gather_changed_context(SLICE_DIFF, _slice_repo(tmp_path), mode="slice")
+    assert "FUNCTION pkg/jobs.py::_payload" in block
+    assert "FUNCTION pkg/jobs.py::resume" in block and "touches 'attachments'" in block
+    assert "FUNCTION pkg/jobs.py::_expired" in block and "called by resume" in block
+    assert "FUNCTION pkg/runner.py::submit" in block
+    assert "unrelated" not in block
+    assert "tests/test_other.py" not in block  # a same-named def in a test is not a caller
+
+
+def test_modes_are_selectable_and_validated(tmp_path, monkeypatch):
+    root = _slice_repo(tmp_path)
+    assert cc.gather_changed_context(SLICE_DIFF, root, mode="none") == ""
+    monkeypatch.setenv("BAIR_CONTEXT", "slice")
+    assert "FUNCTION " in cc.gather_changed_context(SLICE_DIFF, root)
+    monkeypatch.delenv("BAIR_CONTEXT")
+    assert "FILE: pkg/jobs.py" in cc.gather_changed_context(SLICE_DIFF, root)
+    import pytest
+
+    with pytest.raises(ValueError):
+        cc.gather_changed_context(SLICE_DIFF, root, mode="everything")

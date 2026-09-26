@@ -385,6 +385,36 @@ def _post_comment(container: Container, repo: str, pr_num: str, body: str) -> No
 
 
 @command("gatekeep")
+def review(diff: str, root: str, repo: str, pr_num: str, context_mode: str | None = None) -> GatekeepDecision:
+    """The verdict on ``diff`` with the target repo checked out at ``root``: rules,
+    changed-code context, LLM, severity floor, shadow. Shared by the live gate and
+    the eval suite (``bair.evals``) so both measure the same path."""
+    if not diff:
+        logger.warning("empty diff; nothing to review — APPROVE by default")
+        return GatekeepDecision(
+            verdict="APPROVE", severity="LOW",
+            summary="Empty diff; no code changes to review.",
+            issues=[], recommendation="", provider="none",
+        )
+    # Read the TARGET repo's own doctrine (checked out at the root) so the
+    # gatekeeper reviews against project rules, not just generic smell. Empty
+    # when the repo ships no .claude rules → a generic review, never an error.
+    repo_rules = gather_repo_rules(root)
+    if repo_rules:
+        logger.info(f"gatekeep: loaded {len(repo_rules)} bytes of repository rules")
+    else:
+        logger.info("gatekeep: no .claude repository rules found — generic review")
+    playbook_rules = gather_playbook_rules()
+    if playbook_rules:
+        logger.info(f"gatekeep: loaded {len(playbook_rules)} bytes of universal playbook rules")
+    else:
+        logger.info("gatekeep: no universal playbook rules reachable — repo-only review")
+    code_context = gather_changed_context(diff, root, mode=context_mode)
+    logger.info(f"gatekeep: loaded {len(code_context)} bytes of changed-code context")
+    user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules, code_context)
+    return _shadow(_floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg)))
+
+
 def gatekeep(ctx: CommandContext, container: Container) -> None:
     """The gatekeep pipeline. Called by ai-gatekeep.yml on every PR.
 
@@ -403,32 +433,7 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
         _set_output("executed", "false")
         sys.exit(1)
 
-    diff = _get_diff(base_sha, head_sha)
-    if not diff:
-        logger.warning("empty diff; nothing to review — APPROVE by default")
-        decision = GatekeepDecision(
-            verdict="APPROVE", severity="LOW",
-            summary="Empty diff; no code changes to review.",
-            issues=[], recommendation="", provider="none",
-        )
-    else:
-        # Read the TARGET repo's own doctrine (checked out at the root) so the
-        # gatekeeper reviews against project rules, not just generic smell. Empty
-        # when the repo ships no .claude rules → a generic review, never an error.
-        repo_rules = gather_repo_rules(".")
-        if repo_rules:
-            logger.info(f"gatekeep: loaded {len(repo_rules)} bytes of repository rules")
-        else:
-            logger.info("gatekeep: no .claude repository rules found — generic review")
-        playbook_rules = gather_playbook_rules()
-        if playbook_rules:
-            logger.info(f"gatekeep: loaded {len(playbook_rules)} bytes of universal playbook rules")
-        else:
-            logger.info("gatekeep: no universal playbook rules reachable — repo-only review")
-        code_context = gather_changed_context(diff, ".")
-        logger.info(f"gatekeep: loaded {len(code_context)} bytes of changed-code context")
-        user_msg = _build_user_msg(diff, repo_rules, repo, pr_num, playbook_rules, code_context)
-        decision = _shadow(_floor_verdict(_call_llm(load_prompt("gatekeep_system"), user_msg)))
+    decision = review(_get_diff(base_sha, head_sha), ".", repo, pr_num)
 
     body = _render_comment(decision)
     _post_comment(container, repo, pr_num, body)

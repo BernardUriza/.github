@@ -1,0 +1,269 @@
+{
+ "repo": "BernardUriza/server-bot",
+ "cases": [
+  {
+   "id": "defect-c74dbf4",
+   "label": "defect",
+   "base": "5bddbb5aff09945ac866b5855a0bf7b511e0aca4",
+   "head": "c74dbf450ea8b8af7d4869c7a1cefec2660c5b3a",
+   "source": "PR #92 body (Regresión de c74dbf4)",
+   "truth": "P0 #92: the live run rebuilt the TurnRequest from the ledger row, which never stores attachments — every image dropped",
+   "subject": "feat(runner): boleto durable `turn_jobs` en Postgres — reanudación por id, latido, espera de shutdown y grace 600 [v4.40.2]",
+   "split": "dev",
+   "fix": "6ef20eb15349618c5aec534c138ab2ca4f4204ee"
+  },
+  {
+   "id": "defect-54ecb0d",
+   "label": "defect",
+   "base": "14f431f202445c8f405cfe58e55f473529ad9b17",
+   "head": "54ecb0d7c8a4244acff0fcd1c9ebf442ff07d795",
+   "source": "SZZ from fix 0d3680f6e",
+   "truth": "529 retry catches anthropic.OverloadedError, which is not the class the SDK raises for 529 — overloads are still not retried",
+   "subject": "Fix 529 OverloadedError not retried (v3.1.1)",
+   "split": "dev",
+   "fix": "0d3680f6e4db4db8b47a3feb49285ede446845ba"
+  },
+  {
+   "id": "defect-8e30a23",
+   "label": "defect",
+   "base": "1696b156571e1c7f67b32426fc04abb93acb7edb",
+   "head": "8e30a2320ddea709afae1be401947c62c2d63cd6",
+   "source": "SZZ from fix a6f59b205",
+   "truth": "empty-response fallback fires when the model only produced tool_use — a false in-character error on every tool-only turn",
+   "subject": "Move image generation to background — never block text delivery",
+   "split": "dev",
+   "fix": "a6f59b20578fb270c91f981b0e924969a603c64e"
+  },
+  {
+   "id": "defect-4237771",
+   "label": "defect",
+   "base": "8397feb12977fc9ddc38fd2713ab7264db77ae20",
+   "head": "42377714a7c02a96541e86c5ec7ec903b454f311",
+   "source": "SZZ from fix bf732f19a",
+   "truth": "aiohttp follows the redirect and strips the Authorization header — Pollinations answers 401",
+   "subject": "Fix Pollinations image generation (new API endpoint + auth) and facts extraction truncation (v1.4.2)",
+   "split": "heldout",
+   "fix": "bf732f19a863308e9efc9a2fb5981040a67f0367"
+  },
+  {
+   "id": "defect-654b8a1",
+   "label": "defect",
+   "base": "492d34b19baa4934bd54bd62214ae4abc3a0ecc5",
+   "head": "654b8a1b8775d1564ea8b001381b0bc156f4943d",
+   "source": "SZZ from fix 0c613b63b",
+   "truth": "httpx does not follow redirects by default — Azure's http→https 301 is treated as a rejection and the bridge dies",
+   "subject": "debug(invoke_alice): log entry + catch-all exception (v3.9.13)",
+   "split": "dev",
+   "fix": "0c613b63b0c06f3a05be861c98f3265d8e7193fb"
+  },
+  {
+   "id": "defect-4855f69",
+   "label": "defect",
+   "base": "2edc77921c13dde44148cf88c6f7f244ed640c62",
+   "head": "4855f69d9cc9b0b4616db3d90180ae239cfc0a50",
+   "source": "SZZ from fix 71cd41c1f",
+   "truth": "watchdog liveness uses on_socket_event_type dispatch events, which go quiet in idle servers — false restarts",
+   "subject": "feat(watchdog): gateway zombie detector auto-restarts on detection (v3.9.34)",
+   "split": "heldout",
+   "fix": "71cd41c1fc074863ba2d9b82ff3df19e85bafea6"
+  },
+  {
+   "id": "defect-075d829",
+   "label": "defect",
+   "base": "d0d76cc2a1c7ddc4b650394f56b139ee63df78cf",
+   "head": "075d8293a961ed75aaf1a9a4c6680e6e452fc85d",
+   "source": "SZZ from fix f17b45f79",
+   "truth": "structlog metrics processor + upload froze ALICE after the first watchdog tick",
+   "subject": "feat(dashboard): ALICE multi-bot card (v2.2.1 / discord-bot v3.9.38)",
+   "split": "heldout",
+   "fix": "f17b45f79f38afbe8d502d94a33aa98306979e10"
+  },
+  {
+   "id": "defect-f1208d0",
+   "label": "defect",
+   "base": "7657ff5ce51a6457d554f8ae692922d917580b33",
+   "head": "f1208d027b8b27d030ffb7a44eb58cd621617a43",
+   "source": "SZZ from fix 5ae81548e",
+   "truth": "user_text max_length=8000 — pasted .txt attachments get a 422 and fall over to ALICE",
+   "subject": "feat: HTML artifact system — agent publishes pages, served at /a/{id} (v3.9.57)",
+   "split": "dev",
+   "fix": "5ae81548e15e730041146ec7145560e555e08e72"
+  },
+  {
+   "id": "defect-6b84fe2",
+   "label": "defect",
+   "base": "02ed9c1f598054dd2ed3c294f26202ea6dcf9278",
+   "head": "6b84fe2f8bead77b4c6a4e39b8063a256f484995",
+   "source": "SZZ from fix 54645cfc1",
+   "truth": "metadata-strip regexes miss the [timestamp] Speaker: combo — metadata leaks into replies",
+   "subject": "Fix metadata leaking: strip timestamps and speaker labels from output (v0.3.5)",
+   "split": "heldout",
+   "fix": "54645cfc16e34035244a6b5b0f321c64032c2bac"
+  },
+  {
+   "id": "defect-25a7458",
+   "label": "defect",
+   "base": "f47cb48768503284bcbe58359e8dabed1ca4ecc8",
+   "head": "25a7458f6a8562dd56573906ffe7274cade40f2f",
+   "source": "SZZ from fix 37af7d703",
+   "truth": "backup download overwrites a richer local DB with a poorer remote blob — data loss (wiped a user's clinical facts)",
+   "subject": "fix(moltbook): translate inline section headers to English (v3.7.58)",
+   "split": "heldout",
+   "fix": "37af7d703ce128b795ffe0ab6e08a21b1fb1807a"
+  },
+  {
+   "id": "defect-d099e01",
+   "label": "defect",
+   "base": "5c22dfe402f2cdf5a5a0e842879a588cd3b89846",
+   "head": "d099e01629ebebe4a6770d1eb11047275bbca3df",
+   "source": "SZZ from fix eb9f5bc19",
+   "truth": "tool definitions send strict:true, unsupported by the model — tool calls fail",
+   "subject": "Migrate channel creation from [ACTION:] text markers to Claude tool_use (v0.7.0)",
+   "split": "heldout",
+   "fix": "eb9f5bc19d761e59adc51cbf95b08804fd89b9ea"
+  },
+  {
+   "id": "defect-eb6a961",
+   "label": "defect",
+   "base": "8ea27129120a493c4ae5103298451a8882a22524",
+   "head": "eb6a9616d6951766bbaec2fc37b163c9ba7b6677",
+   "source": "SZZ from fix 0e95f1dd6",
+   "truth": "server tool web_search sent with a description field — invalid request",
+   "subject": "feat(synthesis): MULTI_DOMAIN_SYNTHESIS modifier — search before challenging (v3.6.3)",
+   "split": "dev",
+   "fix": "0e95f1dd6c165c17e42880670b3c66c3e5eae817"
+  },
+  {
+   "id": "clean-7725c58",
+   "label": "clean",
+   "base": "7fee1a4ff6bdbecccdb46a51b7cbbe2a5b2bc3bd",
+   "head": "7725c58f068eb1e8f285a24945c3552c3a7f6232",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "feat(host): el loop del host omnipresente — batch→route→dispatch atado y probado (#6 slice 3) [v4.22.64]",
+   "split": "heldout",
+   "fix": ""
+  },
+  {
+   "id": "clean-446193d",
+   "label": "clean",
+   "base": "1bb6f0741057cb7fc5ec548481c515cadd5c0297",
+   "head": "446193d3b4028367117c286b7d795f4f0c576b11",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "refactor(demux_ai): borrar `LLMShadowRouter` — cierra \"cadenas cortadas post-purga\" [v4.40.8]",
+   "split": "heldout",
+   "fix": ""
+  },
+  {
+   "id": "clean-13884b5",
+   "label": "clean",
+   "base": "56ee53411c6a0459a194008f90859b904b61a9d9",
+   "head": "13884b554dc187ec9bc89b47ef42f07478eb2609",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "feat(agent-facts): bot self-knowledge — agents + agent_facts table + MCP CRUD tools (4.20.14) (#4)",
+   "split": "dev",
+   "fix": ""
+  },
+  {
+   "id": "clean-ea8339d",
+   "label": "clean",
+   "base": "4c29c5f3e5b303c4429608ac66186c46943d8e13",
+   "head": "ea8339d65b1e451ca399fa39041458023256ee5b",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "refactor: relocate post-LLM marker pipelines (reactions + remembers) to host",
+   "split": "dev",
+   "fix": ""
+  },
+  {
+   "id": "clean-a37f39c",
+   "label": "clean",
+   "base": "4fd059742889a83368f1415bda3eecd17b298a9b",
+   "head": "a37f39ce64997d8688c117aaca7901aeb04cc1af",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "refactor: PR-B1 migrate preset inline prompts to insult/prompts/*.md (v4.21.29)",
+   "split": "dev",
+   "fix": ""
+  },
+  {
+   "id": "clean-d194292",
+   "label": "clean",
+   "base": "2dc37ecccb06593795091ec422c1ab6892ea80a8",
+   "head": "d194292bd3d936fb3d9a60cd152fc54f354bff90",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "feat(router): tighten gpt-4.1 router to INTENT + $5/week spend cap [v4.21.96]",
+   "split": "dev",
+   "fix": ""
+  },
+  {
+   "id": "clean-8effcfb",
+   "label": "clean",
+   "base": "75ea5fe2f6f8cc4f420fa4ca0ac6e8d528c78b93",
+   "head": "8effcfb1664b6366999806cbe8ecea8b87a02797",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "feat(vision): la imagen deja huella — memoria longitudinal para lo visual [v4.26.0]",
+   "split": "heldout",
+   "fix": ""
+  },
+  {
+   "id": "clean-953f15e",
+   "label": "clean",
+   "base": "ad9e6e6eb62aa92bd7804acaf4b306cfa0d416e8",
+   "head": "953f15e7ce67de761fbc60859c14a136d8c9b698",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "Cut LLM costs ~50%: cache split, Haiku facts, triviality filter (v3.4.0)",
+   "split": "heldout",
+   "fix": ""
+  },
+  {
+   "id": "clean-245587f",
+   "label": "clean",
+   "base": "faf97c1cfa41c31f09e39a56d62f2a1ee7c9a111",
+   "head": "245587f77917806bb83a8829a1d81b67df9704a0",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "feat(corpus): el RAG ya traía su procedencia y el prompt la tiraba [v4.32.10]",
+   "split": "heldout",
+   "fix": ""
+  },
+  {
+   "id": "clean-3d33542",
+   "label": "clean",
+   "base": "3fd679693bf88b90556f8e329e51ba588c585b3b",
+   "head": "3d335429fb1a4d965ab119a7c08281a2f8038cce",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ",
+   "truth": "",
+   "subject": "Add !facts command to show user facts in Discord (v0.3.3)",
+   "split": "heldout",
+   "fix": ""
+  },
+  {
+   "id": "clean-pr101",
+   "label": "clean",
+   "base": "9e357af992df66b4b04a07b81df4be714c1849d0",
+   "head": "490708de91fe61e5544ccdedec91a0279d1ced73",
+   "source": "merged PR #101",
+   "truth": "",
+   "subject": "PR #101 invited_by=host fix",
+   "split": "dev",
+   "fix": ""
+  },
+  {
+   "id": "clean-pr105",
+   "label": "clean",
+   "base": "f6bb0935759d167b696f7b021c651619ba1abfd5",
+   "head": "6fc292a9dbeaa7f1d5365119d06d3a216377099b",
+   "source": "merged PR #105",
+   "truth": "",
+   "subject": "PR #105 drop the base64 image path (clean data-plane)",
+   "split": "dev",
+   "fix": ""
+  }
+ ]
+}
