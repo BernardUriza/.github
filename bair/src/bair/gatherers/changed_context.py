@@ -291,11 +291,13 @@ def _full(diff: str, root: Path) -> str:
 def gather_changed_context(diff: str, root: str | Path = ".", mode: str | None = None) -> str:
     """The ``<changed_code_context>`` block for ``diff``, or ``""`` when nothing fits.
 
-    ``mode`` (default: ``$BAIR_CONTEXT``, else ``full``): ``full`` sends whole
-    touched files plus call sites; ``slice`` sends function bodies only; ``none``
-    sends nothing. The eval suite compares them — the default moves only on its
-    numbers."""
-    mode = (mode or os.environ.get(_MODE_ENV) or "full").lower()
+    ``mode`` (default: ``$BAIR_CONTEXT``, else ``slice``): ``slice`` sends function
+    bodies along the data flow; ``full`` sends whole touched files plus call sites;
+    ``none`` sends nothing. The default moves only on the eval suite's held-out
+    numbers: on 2026-09-26 (server-bot, 6+6 held-out, 3 runs) slice matched full on
+    BLOCKs (0/6 vs 0/6) and false BLOCKs (0/6 vs 0/6), flagged 4/6 vs 3/6 at ≥WARN,
+    with ~3x less context — non-inferior and cheaper, so it became the default."""
+    mode = (mode or os.environ.get(_MODE_ENV) or "slice").lower()
     if mode not in _MODES:
         raise ValueError(f"unknown {_MODE_ENV}={mode!r}; expected one of {_MODES}")
     root = Path(root)

@@ -1,6 +1,6 @@
 # 01 — The gate has never said no: prove BAIR can fail, then tune it
 
-Status: **In progress** 2026-09-26 — calibration and context shipped, data-plane rules in **shadow mode**; the eval suite (step 6) gates promotion (from a review of server-bot PRs #93/#94/#95).
+Status: **In progress** 2026-09-26 — eval suite live; first baseline says **recall is the problem** (held-out 0/6 BLOCKed, 3–4/6 flagged), precision is fine (0/12 false BLOCKs) (from a review of server-bot PRs #93/#94/#95).
 
 ## The receipt
 
@@ -190,3 +190,73 @@ maintainer-only label) before anything leaves shadow; consider 2-of-3 agreement
 before `exit 1` if the suite shows a nonzero flip rate. Injection note: the PR
 body/title are NOT sent to the model today (`_build_user_msg` sends repo + number
 only); the remaining vector is comments inside the diff.
+
+## Step 6 — built (2026-09-26, BernardUriza/.github `5e9d5ab`)
+
+- **Cases** (`bair/src/bair/evals/cases_server_bot.json`): 12 defects = real
+  bug-introducing commits of server-bot. #92's culprit c74dbf4 comes from its PR
+  body; the other 11 come from **SZZ** (Śliwerski/Zimmermann/Zeller 2005: blame, on
+  the fix's parent, the lines each `fix` commit changed), filtered from 60
+  candidates by hand — SZZ's documented noise (prompt tweaks, lint, deps, features)
+  dropped. Ground truth = the fix commit and its message. 12 clean = 10 commits
+  sampled with `random.seed(42)` among code commits (40–400 lines, ≥2 .py files)
+  never blamed by SZZ, plus merged #101 and #105 (clean data-plane hard negative).
+  Clean labels are approximate: a commit nobody fixed later can still hide a bug.
+  Split 6+6 dev / 6+6 held-out; the two data-plane defects go one to each side.
+- **Runner** `python -m bair.evals`: same `gatekeep.review` as the live gate (now
+  extracted from `gatekeep()`), a git worktree per case, JSONL rows keyed by the
+  prompt's sha256 + model + bair ref, report with Wilson intervals, flip rate,
+  localization (does any issue name a file the real fix touched), and paired
+  discordance. Held-out cases are reported only in aggregate.
+- **Context modes** behind `BAIR_CONTEXT`: `full` (default: whole files + call
+  sites, median ~70 KB on these cases) vs `slice` (function bodies along the data
+  flow: changed functions, callers, same-module readers of the hunk's data keys,
+  one hop into helpers; median ~24 KB). On #104 the slice is 4 KB and holds exactly
+  `_payload → resume → _expired`.
+- **Where it runs**: `server-bot` branch `bair-eval`, workflow
+  `.github/workflows/bair-eval.yml`, triggered by push to that branch only (nothing
+  on main, no CI/CD). Secrets stay in the consumer repo. Rows ship as the
+  `bair-eval-jsonl` artifact.
+
+## Step 6 — first baseline (2026-09-26, server-bot run 36205574236)
+
+prompt `4a487c5ea97e` · model `claude-opus-4-7` · bair `5e9d5abe88e8` · 24 cases × 2
+contexts × 3 runs = 144 rows, 0 unavailable, median 6 s per review. Rows:
+artifact `bair-eval-jsonl` of that run.
+
+| split | context | defects BLOCKed | defects ≥WARN | clean falsely BLOCKed | clean ≥WARN | flipped |
+|---|---|---|---|---|---|---|
+| dev | full | 2/6 (10–70%) | 2/6 | 0/6 (0–39%) | 0/6 | 0 |
+| dev | slice | 2/6 (10–70%) | 2/6 | 0/6 (0–39%) | 0/6 | 1 |
+| **held-out** | full | **0/6** (0–39%) | 3/6 (19–81%) | 0/6 (0–39%) | 0/6 | 0 |
+| **held-out** | slice | **0/6** (0–39%) | 4/6 (30–90%) | 0/6 (0–39%) | 1/6 | 1 |
+
+**Decision (rule fixed before the run):** `slice` becomes the default context
+(`bair` commit after `5e9d5ab`): on held-out it is non-inferior to `full` on BLOCKs
+and false BLOCKs, and ~3× smaller. The 4/6 vs 3/6 at ≥WARN is one case — noise, not
+a win; it also added one clean WARN and one flip. `full` stays available via
+`BAIR_CONTEXT=full`.
+
+What the baseline says (dev read case by case, held-out only in aggregate):
+
+- **Precision holds, recall does not.** 0 false BLOCKs in 12 clean cases (upper
+  bound ~39% at n=6 — a tripwire, not a precision estimate). But the gate BLOCKs 2
+  of 12 real regressions, both in dev: #92's culprit (c74dbf4) and the 8000-char
+  cap that 422'd attachments (f1208d0). In held-out it BLOCKs none.
+- **What it waves through (dev):** a retry catching an exception class the SDK
+  never raises for 529, httpx not following Azure's 301, a server tool sent with an
+  invalid `description`, a fallback that fires on tool-only turns — APPROVE/LOW,
+  unanimous across runs. These need library/API knowledge the diff does not carry;
+  more repo context does not supply it.
+- **Shadow mode is leaky.** Both dev BLOCKs were real (`would_block=false`), typed
+  outside `data_plane` — the model does not reliably use the type the prompt asks
+  for, so `_SHADOW_TYPES` does not contain the new rules as designed. Here the
+  blocks were correct; the containment claim in step 2b is still false.
+- **Promotion out of shadow: not met** (needs ≥5/6 held-out defects caught).
+
+Next, evidence-driven: (1) make shadow attribution not depend on the model's free
+`type` (e.g. a required `rule` field enumerated in the schema, validated in code);
+(2) attack recall on the API/library class — a verification/second-pass that asks
+per changed call "what does this library actually do here?" is the candidate the
+research points to (Anthropic's verification step, BitsAI-CR filter); measure it
+with this suite before shipping; (3) grow n toward 50 per class for real intervals.

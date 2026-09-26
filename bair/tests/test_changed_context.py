@@ -63,7 +63,7 @@ def test_a_deletion_only_hunk_still_names_its_function(tmp_path):
 
 
 def test_the_code_outside_the_hunk_reaches_the_review(tmp_path):
-    block = cc.gather_changed_context(DIFF, _repo(tmp_path))
+    block = cc.gather_changed_context(DIFF, _repo(tmp_path), mode="full")
     assert block.startswith("<changed_code_context>")
     assert "FILE: pkg/jobs.py (full text after the change)" in block
     assert "def _expired(blocks):" in block
@@ -73,7 +73,7 @@ def test_the_code_outside_the_hunk_reaches_the_review(tmp_path):
 
 def test_budget_omits_instead_of_overflowing(tmp_path, monkeypatch):
     monkeypatch.setattr(cc, "_MAX_BYTES", 150)
-    block = cc.gather_changed_context(DIFF, _repo(tmp_path))
+    block = cc.gather_changed_context(DIFF, _repo(tmp_path), mode="full")
     assert "context budget exhausted" in block
     assert len(block) < 600
 
@@ -142,7 +142,8 @@ def test_modes_are_selectable_and_validated(tmp_path, monkeypatch):
     monkeypatch.setenv("BAIR_CONTEXT", "slice")
     assert "FUNCTION " in cc.gather_changed_context(SLICE_DIFF, root)
     monkeypatch.delenv("BAIR_CONTEXT")
-    assert "FILE: pkg/jobs.py" in cc.gather_changed_context(SLICE_DIFF, root)
+    assert "FUNCTION pkg/jobs.py::_payload" in cc.gather_changed_context(SLICE_DIFF, root)  # slice is the default
+    assert "FILE: pkg/jobs.py" in cc.gather_changed_context(SLICE_DIFF, root, mode="full")
     import pytest
 
     with pytest.raises(ValueError):
