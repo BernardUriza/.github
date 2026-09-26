@@ -24,6 +24,7 @@ Consumers inline the workflow (cross-repo ``workflow_call`` trips
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -126,17 +127,28 @@ def _claude_model(model: str | None) -> str:
 
 
 def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecision:
-    """Try the Claude Code binary (subscription), then an Anthropic API key, then
-    OpenAI; abstain when all fail.
+    """Try AIRE, then the Claude Code binary (subscription), then an Anthropic API
+    key, then OpenAI; abstain when all fail.
 
     Each provider attempt catches every exception and records why it failed,
     so the abstention comment carries the diagnosis instead of "none"."""
+    aire_token = os.environ.get(_AIRE_TOKEN_ENV, "")
     oauth_token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     failures: list[str] = []
 
-    # Prefer the owner's Claude subscription — through the unmodified `claude`
+    # AIRE first: Bernard's canonical source of LLM agents. It owns the model
+    # credential, the transcript and the spend, so the gate holds only its own
+    # revocable consumer token.
+    if aire_token:
+        try:
+            return _call_aire(system, user, aire_token, model=model)
+        except Exception as exc:  # noqa: BLE001 — provider fallback
+            logger.warning(f"AIRE provider failed: {exc}")
+            failures.append(f"aire: {_short(exc)}")
+
+    # Then the owner's Claude subscription — through the unmodified `claude`
     # binary, the path Anthropic's terms allow for a subscription OAuth token (see
     # _call_claude_code). Falls back to an Anthropic API key, then OpenAI, then
     # UNAVAILABLE.
@@ -167,6 +179,51 @@ def _call_llm(system: str, user: str, model: str | None = None) -> GatekeepDecis
 def _short(exc: BaseException, limit: int = 160) -> str:
     text = " ".join(str(exc).split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+_AIRE_TOKEN_ENV = "AIRE_BAIR_TOKEN"  # BAIR's own consumer slot on AIRE's door, revocable alone
+_AIRE_GATE_DEFAULT = "https://gate.bernarduriza.com"
+_AIRE_TIMEOUT_S = 600.0
+
+
+def _aire_casita(system: str) -> str:
+    """``bair-gatekeep-{sha256(prompt)}``. AIRE's door installs a system prompt per
+    CASITA (``/init``), not per turn, so the casita is named after the prompt: two
+    different prompts — the eval suite A/Bs them in parallel — can never share one
+    surface and answer under each other's instructions. Same pattern as
+    server-bot's judge (``judge_casita_for``); bounded by the number of prompt
+    versions, not by the number of reviews."""
+    return f"bair-gatekeep-{hashlib.sha256(system.encode('utf-8')).hexdigest()[:32]}"
+
+
+def _call_aire(system: str, user: str, token: str, model: str | None = None) -> GatekeepDecision:
+    """One review through AIRE with its canonical client (``fi_runner.AIREBackend``):
+    mode ``complete`` (the raw-API substitute — no builtins, no agentic loop), no
+    MCP servers, no tools, a throwaway session per review. AIRE holds the model
+    credential and mirrors the transcript; bair presents only its own token."""
+    import asyncio
+
+    from fi_runner import AIREBackend
+    from fi_runner.backend import ToolPolicy
+
+    backend = AIREBackend(
+        project=_aire_casita(system),
+        gate_url=os.environ.get("AIRE_GATE_URL", _AIRE_GATE_DEFAULT),
+        auth_token=token,
+        default_mode="complete",
+        timeout=_AIRE_TIMEOUT_S,
+    )
+    result = asyncio.run(
+        backend.run_turn(
+            system_prompt=system,
+            user_message=user,
+            mcp_servers=[],
+            tool_policy=ToolPolicy(),
+            model=_claude_model(model),
+            session_id=None,
+        )
+    )
+    return _normalize(_extract_json(result.text or ""), provider="aire")
 
 
 _CLI_TIMEOUT_S = 600  # the binary retries the API itself (429/5xx) inside this budget

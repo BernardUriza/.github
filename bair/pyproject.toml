@@ -9,6 +9,10 @@ license = { text = "MIT" }
 
 dependencies = [
     "xair @ git+https://github.com/BernardUriza/xair@main",
+    # AIRE's canonical client (AIREBackend). fi-core/fi-runner ship on Bernard's
+    # conda channel, never PyPI; pip takes them straight from their source tree.
+    "fi-core @ git+https://github.com/BernardUriza/free-intelligence@main#subdirectory=apps/packages/fi-core",
+    "fi-runner @ git+https://github.com/BernardUriza/free-intelligence@main#subdirectory=apps/packages/fi-runner",
 ]
 
 [project.scripts]
