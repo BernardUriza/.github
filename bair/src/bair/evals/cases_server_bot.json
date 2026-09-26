@@ -138,7 +138,7 @@
    "label": "clean",
    "base": "7fee1a4ff6bdbecccdb46a51b7cbbe2a5b2bc3bd",
    "head": "7725c58f068eb1e8f285a24945c3552c3a7f6232",
-   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it; audit 2026-09-26: clean confirmed (opus-5-5 claim refuted by hand)",
    "truth": "",
    "subject": "feat(host): el loop del host omnipresente — batch→route→dispatch atado y probado (#6 slice 3) [v4.22.64]",
    "split": "dev",
@@ -200,12 +200,12 @@
    "fix": ""
   },
   {
-   "id": "clean-8effcfb",
-   "label": "clean",
+   "id": "defect-8effcfb",
+   "label": "defect",
    "base": "75ea5fe2f6f8cc4f420fa4ca0ac6e8d528c78b93",
    "head": "8effcfb1664b6366999806cbe8ecea8b87a02797",
-   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it",
-   "truth": "",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it; audit 2026-09-26: latent, minor — verified by hand, still live on main",
+   "truth": "append_content_by_discord_id appends unconditionally (content || '\\n' || suffix); an image message summoned for two personas (two mentions, or an edit that adds one) spawns vision in each gateway and duplicates the [Imagen adjunta: …] line in the stored row. Minor: duplicated text, no loss.",
    "subject": "feat(vision): la imagen deja huella — memoria longitudinal para lo visual [v4.26.0]",
    "split": "dev",
    "fix": ""
@@ -215,7 +215,7 @@
    "label": "clean",
    "base": "ad9e6e6eb62aa92bd7804acaf4b306cfa0d416e8",
    "head": "953f15e7ce67de761fbc60859c14a136d8c9b698",
-   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it",
+   "source": "seeded sample (random.seed(42)), never blamed by SZZ; moved held-out→dev 2026-09-26 for a label audit after opus-5-5 BLOCKed it; audit 2026-09-26: clean confirmed (opus-5-5 claim refuted by hand)",
    "truth": "",
    "subject": "Cut LLM costs ~50%: cache split, Haiku facts, triviality filter (v3.4.0)",
    "split": "dev",
@@ -304,7 +304,7 @@
    "split": "dev",
    "base": "3f96e849202d44afe9f3a7e5d8a6106db2e7bfdc",
    "head": "24d5b9f6366ff8b6e8af74c086be74e50b3c9544",
-   "source": "PR #109 — BAIR (claude-opus-4-7) BLOCKed it for a hallucinated SyntaxError: `except A, B:` is valid on Python 3.14 (PEP 758) and the line predates the PR",
+   "source": "PR #109 — BAIR (claude-opus-4-7) BLOCKed it for a hallucinated SyntaxError: `except A, B:` is valid on Python 3.14 (PEP 758) and the line predates the PR; audit 2026-09-26: clean confirmed; opus-5-5's untested bind→lookup→tool chain is a real test gap, not a defect",
    "truth": "",
    "subject": "fix(agent_facts): persona bound by the server",
    "fix": ""

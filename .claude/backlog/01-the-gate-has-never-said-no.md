@@ -300,3 +300,37 @@ That makes the held-out 3/6 suspect in the same way, and the decision hinges on 
 Next: a **label audit of the three held-out clean cases opus-5-5 BLOCKed** — reading
 them spends them as held-out, so each audited case moves to dev and a fresh clean
 case replaces it in held-out; the A/B then reruns on the rebuilt held-out.
+
+## Step 7b — held-out label audit + A/B rerun (2026-09-26, run 36212423881)
+
+Rebuilt held-out (3 audited cases moved to dev, 3 fresh clean ones from
+`random.Random(43)`), plus `clean-pr109` in dev. bair `565cedf`, slice, 3 runs, 168
+rows, 0 unavailable, `rule` valid 392/392.
+
+| split | config | defects BLOCKed | defects ≥WARN | clean falsely BLOCKed | clean ≥WARN |
+|---|---|---|---|---|---|
+| **held-out** | 4-7 | **0/6** | 2/6 | **0/6** | 1/6 |
+| **held-out** | 5-5 | **4/6** (30–90%) | 4/6 | **2/6** (10–70%) | 2/6 |
+
+**Rule fails again (added false BLOCKs) — default stays `claude-opus-4-7`.**
+
+Audit of the cases opus-5-5 BLOCKed, each claim checked against the code by hand:
+
+| case | opus-5-5 claim | verdict |
+|---|---|---|
+| clean-953f15e | `settings.summary_model` "if missing" → AttributeError; trivial-message filter skips the profile | **false** — `summary_model` exists (`insult/config.py:47`); the filter is the commit's intent |
+| clean-7725c58 | `tick` has no try/except, a dispatch fault drops popped batches; "two unseen readers decide" | **false** — `route_and_dispatch` swallows router errors and `summon_persona` catches `Exception` |
+| clean-8effcfb | (a) storing a text description of an image breaks "attachment content is not stored"; (b) the append is not idempotent | (a) debatable, a documented design change; **(b) real**: unconditional append, duplicated for a multi-persona summon — relabelled **latent minor defect**, still live on main |
+| clean-pr109 | the bind→lookup→tool chain and stem=`agents.name` are untested | **real test gap, not a defect** — stays clean; gap being closed in #109 |
+| clean-pr109 (opus-4-7) | `except TypeError, ValueError:` is a SyntaxError | **false** — valid on Python 3.14 (PEP 758), CI imports it |
+
+**The finding that matters:** opus-5-5's false BLOCKs come from *my prompt*, not the
+model. Two of the three (7725c58, pr109) quote the data-plane rules almost verbatim:
+"when the diff cannot show the readers, that uncertainty is the finding" and "an
+untested data-plane change is CRITICAL". A model that follows instructions better
+turns those into BLOCKs. opus-4-7's false BLOCK is different in kind: a knowledge
+hallucination (PEP 758).
+
+Next experiment (prompt, not model): demote "uncertain reader" and "untested
+data-plane change" from CRITICAL to HIGH (WARN), keep CRITICAL for a concrete,
+cited data-loss/crash path; rerun 4-7 vs 5-5 on this held-out.
