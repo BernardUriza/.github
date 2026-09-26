@@ -68,6 +68,10 @@ Any change to the prompt, the model, the context or the verdict logic is decided
 - **No secrets here.** They live in consumer repos' Actions secrets. See `.claude/rules/secrets-handling.md`.
 - **Consumers inline the workflow.** Cross-repo `workflow_call` trips `startup_failure`, so there is no reusable workflow here; the canonical template is server-bot's `.github/workflows/ai-gatekeep.yml` (OAuth + App token + `python -m bair gatekeep`).
 
+## 📜 Constitution
+
+Governed by agent-constitution, **profile `personal`** (only Bernard works here; that consumers `pip install` it from `main` raises the stakes, not the ownership). Policy `repo > personal > core`: this file and `.claude/rules/*.md` stay the nearest authority. Committed: `.claude/constitution.{toml,lock,toolchain.toml}` + `.claude/.gitignore`; everything `constitution install` materializes (`.claude/rules/_constitution/`, the store, hooks in `settings.local.json`, linked capabilities) is gitignored. `bair`'s `repo_rules` deliberately skips `_constitution/` so a PR gets the same doctrine on a dev machine as in CI. Re-verify with `constitution verify` (must be CLEAN).
+
 ## 🏷️ Conventions
 
 - **Commits:** Conventional Commits. **Branches:** push directly to `main` (no CI here — run `pytest` before pushing, it IS the deploy).
