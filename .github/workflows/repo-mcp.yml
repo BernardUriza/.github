@@ -2,7 +2,7 @@ name: repo-mcp — build and deploy bair's read-only repo MCP
 
 # AIRE's reviewer reads the repository through this MCP (aire-server #48
 # remote_tools). Image on GHCR, served by the Container App `bair-repo-mcp`
-# (insult-rg, prod-env). AZURE_CREDENTIALS here is a service principal scoped to
+# (portfolio-rg, portfolio-env since 2026-10-17). AZURE_CREDENTIALS here is a service principal scoped to
 # that one app, revocable alone.
 
 on:
@@ -26,7 +26,7 @@ permissions:
 env:
   IMAGE: ghcr.io/bernarduriza/bair-repo-mcp
   APP: bair-repo-mcp
-  RG: insult-rg
+  RG: portfolio-rg
 
 jobs:
   deploy:
