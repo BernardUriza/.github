@@ -48,7 +48,8 @@ bair/src/bair/
 2. **LLM:** `_call_llm` → Claude (default `claude-opus-4-7`, override `BAIR_GATEKEEP_MODEL`) → `_normalize` (validated verdict/severity/issues).
 3. **Floor:** the verdict never sits below its worst issue (CRITICAL → BLOCK, HIGH → ≥ WARN).
 4. **Shadow:** a BLOCK resting only on issues with `rule: data_plane` exits as WARN with `would_block=true`. Promotion = emptying `_SHADOW_RULES`, only on eval evidence.
-5. **Exit:** 1 only on BLOCK.
+5. **Emit:** the step summary on every run (the log if `GITHUB_STEP_SUMMARY` is missing), then the PR comment per `_comment_action`. A comment is an email, so a model's APPROVE does not comment: the check stays green and the verdict lives in the summary. WARN, BLOCK, ABSTAINED and an APPROVE from provider `none` comment. One live comment per PR, found by a hidden marker from a Bot: the same verdict, a quiet APPROVE or BLOCK→WARN edits it (no email, no stale verdict); any other change posts a new one and stubs the older. **Never make ABSTAINED or a no-provider APPROVE quiet:** that is the silent approval (a 401 for weeks, green check, zero review). A failed comment never changes the verdict.
+6. **Exit:** 1 only on BLOCK.
 
 The live gate and the eval suite call the **same** `review()` — change it and the suite measures exactly what ships.
 
