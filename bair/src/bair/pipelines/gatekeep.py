@@ -4,13 +4,17 @@ Flow (``review``): repo + playbook rules, ``changed_context`` (the code the diff
 feeds), one LLM call, ``_normalize`` (validated JSON), ``_floor_verdict`` (a
 verdict never below its worst issue), ``_shadow`` (data-plane BLOCKs held to WARN
 + ``would_block`` until the eval suite promotes them). ``gatekeep`` wraps it for
-CI: posts the comment, writes $GITHUB_OUTPUT, exits 1 only on BLOCK. The eval suite
+CI: writes the step summary, comments only when a human has to look (see
+``_comment_action``), writes $GITHUB_OUTPUT, exits 1 only on BLOCK. The eval suite
 (``bair.evals``) calls the same ``review``, so it measures exactly what ships.
 
 Failure modes it exists to avoid (history in BernardUriza/.github backlog 01):
 
   - **Silent approval.** The predecessor in free-intelligence failed OPEN on a
-    401 for weeks: green check, zero review. Every run here posts a comment.
+    401 for weeks: green check, zero review. Every run here writes the verdict to
+    the step summary, and any run a model did not approve also comments: WARN,
+    BLOCK, ABSTAINED and an APPROVE with no provider behind it. Only a real
+    model's APPROVE is quiet (a comment is an email; 91% of them said APPROVE).
   - **Blocking on infrastructure.** Providers are tried in order — the owner's
     subscription through the unmodified `claude` binary (isolated; it retries the
     API itself), an Anthropic API key,
@@ -27,6 +31,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, replace
@@ -427,17 +432,137 @@ def _set_output(key: str, value: str) -> None:
         f.write(f"{key}={value}\n")
 
 
-def _post_comment(container: Container, repo: str, pr_num: str, body: str) -> None:
+def _write_step_summary(text: str) -> None:
+    """The record every run leaves, whatever happens to the comment. Outside
+    Actions, or if the file cannot be written, the log carries it instead."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        logger.warning(f"no GITHUB_STEP_SUMMARY; the summary goes to the log:\n{text}")
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(text + "\n")
+    except OSError as exc:
+        logger.warning(f"step summary write failed ({exc}); the summary goes to the log:\n{text}")
+
+
+# One comment per PR: the first thing in its body is this marker, and the verdict
+# in it is what the next run compares against. Matched only at the very start of
+# a Bot's comment, so neither a person nor quoted model text can pose as it.
+_MARKER_RE = re.compile(r"<!-- bair-gatekeeper verdict=([A-Z]+) -->")
+_SUPERSEDED = "SUPERSEDED"
+_SUPERSEDED_BODY = (
+    f"<!-- bair-gatekeeper verdict={_SUPERSEDED} -->\n"
+    "*BAIR Gatekeeper: this verdict was replaced by a newer comment on this PR.*"
+)
+
+
+def _is_quiet(d: GatekeepDecision) -> bool:
+    """A model reviewed the diff and approved it. An APPROVE from provider ``none``
+    is no review at all (an empty diff, which is also what a failed ``git diff``
+    returns), so it stays loud: a green check nobody reviewed is the failure
+    this gate exists to avoid."""
+    return d.verdict == "APPROVE" and d.provider != "none"
+
+
+def _comment_action(d: GatekeepDecision, prior: str | None) -> str:
+    """What this run does to the PR thread: ``post`` (a new comment, so an email),
+    ``edit`` (no email) or ``none``. ``prior`` is the verdict in the PR's live
+    comment, ``None`` when it has none.
+
+    Quiet with nothing to correct stays silent. Quiet over an older verdict edits
+    it so no stale verdict survives. The same verdict again edits. Relaxing BLOCK
+    to WARN edits: the check going green is not news that needs a push. Every other
+    change is news that an edit would hide, so it posts: into BLOCK, into ABSTAINED
+    (this commit went unreviewed behind a green check), or into WARN."""
+    if prior is None:
+        return "none" if _is_quiet(d) else "post"
+    if d.verdict == prior or _is_quiet(d) or (prior, d.verdict) == ("BLOCK", "WARN"):
+        return "edit"
+    return "post"
+
+
+def _comment_body(d: GatekeepDecision, head_sha: str) -> str:
+    """The marker, the verdict, and the commit it speaks for: an edited comment
+    sends no email, so the body has to say which commit it is current for."""
+    return f"<!-- bair-gatekeeper verdict={d.verdict} -->\n{_with_commit(d, head_sha)}"
+
+
+def _with_commit(d: GatekeepDecision, head_sha: str) -> str:
+    return f"{_render_comment(d)}\n\n*Reviewed commit `{head_sha[:12]}`.*"
+
+
+def _live_comments(container: Container, repo: str, pr_num: str) -> list[tuple[int, str]] | None:
+    """``(comment id, verdict)`` of this gate's non-superseded comments on the PR,
+    oldest first; ``None`` when they cannot be read."""
+    try:
+        out = container.github.run_gh(
+            "api", f"repos/{repo}/issues/{pr_num}/comments", "--paginate",
+            "--jq", ".[] | {id, body, author: .user.type}",
+        )
+        comments = [json.loads(line) for line in out.splitlines() if line.strip()]
+    except Exception as exc:  # noqa: BLE001 — emit boundary
+        logger.warning(f"PR comment listing failed: {exc}")
+        return None
+    live = []
+    for c in comments:
+        marker = _MARKER_RE.match(c.get("body") or "")
+        if c.get("author") == "Bot" and marker and marker.group(1) != _SUPERSEDED:
+            live.append((c["id"], marker.group(1)))
+    return live
+
+
+def _post_comment(container: Container, repo: str, pr_num: str, body: str) -> bool:
     """Best-effort PR comment post. A failed comment never changes the
     verdict — the GITHUB_OUTPUT + exit code still gate the merge."""
     try:
         container.github.run_gh(
             "api", f"repos/{repo}/issues/{pr_num}/comments",
             "--method", "POST", "-f", f"body={body}",
-            check=False,
         )
     except Exception as exc:  # noqa: BLE001 — emit boundary
         logger.warning(f"PR comment post failed: {exc}")
+        return False
+    return True
+
+
+def _edit_comment(container: Container, repo: str, comment_id: int, body: str) -> bool:
+    """Best-effort edit in place, same contract as ``_post_comment``."""
+    try:
+        container.github.run_gh(
+            "api", f"repos/{repo}/issues/comments/{comment_id}",
+            "--method", "PATCH", "-f", f"body={body}",
+        )
+    except Exception as exc:  # noqa: BLE001 — emit boundary
+        logger.warning(f"PR comment edit failed: {exc}")
+        return False
+    return True
+
+
+def _emit_comment(container: Container, repo: str, pr_num: str, d: GatekeepDecision, head_sha: str) -> str:
+    """Bring the PR thread in line with this verdict and say what was done. Never
+    raises. When the thread cannot be read or an edit fails, anything not quiet
+    posts: a duplicate comment is cheaper than a verdict nobody hears about."""
+    body = _comment_body(d, head_sha)
+    live = _live_comments(container, repo, pr_num)
+    unread = live is None
+    comments = live or []
+    action = _comment_action(d, comments[-1][1] if comments else None)
+    edit_failed = False
+    if action == "edit" and not _edit_comment(container, repo, comments[-1][0], body):
+        edit_failed = True
+        action = "none" if _is_quiet(d) else "post"
+    if action == "post" and not _post_comment(container, repo, pr_num, body):
+        return "FAILED to post (see the job log); the verdict is unaffected"
+    # A posted comment replaces every older one; an edit replaces any strays.
+    stale = comments if action == "post" else comments[:-1]
+    for comment_id, _ in stale:
+        _edit_comment(container, repo, comment_id, _SUPERSEDED_BODY)
+    if edit_failed and action == "none":
+        return "FAILED to update the older comment (see the job log); it may show a stale verdict"
+    if unread and action == "none":
+        return "none, but the PR's comments could not be read (see the job log); an older one may be stale"
+    return {"post": "posted", "edit": "edited in place", "none": "none (a model approved; nothing to correct)"}[action]
 
 
 def review(
@@ -488,9 +613,10 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
     """The gatekeep pipeline. Called by ai-gatekeep.yml on every PR.
 
     Reads PR_NUM, REPO, BASE_SHA, HEAD_SHA from env (or ctx for the
-    first three). Fetches the diff, runs the LLM, posts a comment,
-    writes ``verdict`` to $GITHUB_OUTPUT, and exits non-zero only on BLOCK.
-    UNAVAILABLE (no provider) abstains: comment + ``abstained=true``, exit 0."""
+    first three). Fetches the diff, runs the LLM, updates the PR thread
+    (``_comment_action``), writes the step summary and ``verdict`` to
+    $GITHUB_OUTPUT, and exits non-zero only on BLOCK. UNAVAILABLE (no provider)
+    abstains: comment + ``abstained=true``, exit 0."""
     repo = ctx.repo or os.environ.get("REPO", "")
     pr_num = ctx.pr_num or os.environ.get("PR_NUM", "")
     base_sha = os.environ.get("BASE_SHA", "")
@@ -498,14 +624,19 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
 
     if not (repo and pr_num and base_sha and head_sha):
         logger.error(f"missing env: REPO={repo!r} PR_NUM={pr_num!r} BASE_SHA={base_sha!r} HEAD_SHA={head_sha!r}")
+        _write_step_summary("## BAIR Gatekeeper: did not run\n\nMissing REPO, PR_NUM, BASE_SHA or HEAD_SHA.")
         _set_output("verdict", "UNAVAILABLE")
         _set_output("executed", "false")
         sys.exit(1)
 
-    decision = review(_get_diff(base_sha, head_sha), ".", repo, pr_num, base_sha=base_sha, head_sha=head_sha)
+    try:
+        decision = review(_get_diff(base_sha, head_sha), ".", repo, pr_num, base_sha=base_sha, head_sha=head_sha)
+    except Exception as exc:
+        _write_step_summary(f"## BAIR Gatekeeper: crashed, no verdict\n\n`{_short(exc)}`")
+        raise
 
-    body = _render_comment(decision)
-    _post_comment(container, repo, pr_num, body)
+    comment = _emit_comment(container, repo, pr_num, decision, head_sha)
+    _write_step_summary(f"{_with_commit(decision, head_sha)}\n\n**PR comment:** {comment}")
 
     _set_output("verdict", decision.verdict)
     _set_output("severity", decision.severity)
@@ -514,7 +645,7 @@ def gatekeep(ctx: CommandContext, container: Container) -> None:
     _set_output("abstained", "true" if decision.verdict == "UNAVAILABLE" else "false")
     _set_output("would_block", "true" if decision.would_block else "false")
 
-    logger.info(f"BAIR gatekeep verdict={decision.verdict} severity={decision.severity} provider={decision.provider}")
+    logger.info(f"BAIR gatekeep verdict={decision.verdict} severity={decision.severity} provider={decision.provider} comment={comment!r}")
 
     code = _exit_code(decision.verdict)
     if code:
@@ -571,6 +702,6 @@ def _exit_code(verdict: str) -> int:
 
 
 # Optional ack appearance when the command is triggered via PR comment.
-# In CI-triggered mode (the typical path) ack is moot — the comment is
-# the deliverable.
+# In CI-triggered mode (the typical path) ack is moot — the check, the step
+# summary and any comment are the deliverable.
 register_ack_meta("gatekeep", icon="🛡️", label="Gatekeeper")

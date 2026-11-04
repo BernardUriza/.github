@@ -14,7 +14,7 @@ bair/                 the gatekeeper (thin consumer of xair)
 
 ## How a repo uses the gate
 
-Copy [server-bot's `ai-gatekeep.yml`](https://github.com/BernardUriza/server-bot/blob/main/.github/workflows/ai-gatekeep.yml) into the consumer repo, add the secrets `BAIR_APP_ID`, `BAIR_APP_PRIVATE_KEY` and `CLAUDE_CODE_OAUTH_TOKEN`, and install the [BAIR GitHub App](https://github.com/apps/bair-gatekeeper). The workflow installs bair from `main` and runs `python -m bair gatekeep`; the verdict lands as a PR comment from `bair-gatekeeper[bot]`.
+Copy [server-bot's `ai-gatekeep.yml`](https://github.com/BernardUriza/server-bot/blob/main/.github/workflows/ai-gatekeep.yml) into the consumer repo, add the secrets `BAIR_APP_ID`, `BAIR_APP_PRIVATE_KEY` and `CLAUDE_CODE_OAUTH_TOKEN`, and install the [BAIR GitHub App](https://github.com/apps/bair-gatekeeper). The workflow installs bair from `main` and runs `python -m bair gatekeep`. The verdict always lands in the check and the job's step summary. WARN, BLOCK and an abstention also comment as `bair-gatekeeper[bot]` (one comment per PR, edited on later runs; a change into BLOCK or an abstention posts a new one so it reaches your inbox). A model's APPROVE does not comment, so it sends no email.
 
 (There is no reusable `workflow_call` here: calling it cross-repo trips `startup_failure`, so each consumer inlines the ~30 lines.)
 

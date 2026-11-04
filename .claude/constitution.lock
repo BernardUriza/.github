@@ -6,14 +6,14 @@ override = []
 [core]
 id = "agent-constitution"
 repo = "https://github.com/BernardUriza/agent-constitution.git"
-rev = "56faba96d3f8e6aea4453fd7b833ef58ade7cbd8"
-tree = "sha256:8fd5867bc4173f25b9d35f3569028549cd906fd733abb824cad529ecde477536"
+rev = "205443b0f6b95a5338f9095c449416f729eca4c3"
+tree = "sha256:bb3dd6b3022110bcf73bdc0fb5a89407f52712eefb64286ef19e73f861fff667"
 
 [repo]
 id = "bair-github"
 surfaces = ["CLAUDE.md", ".claude/CLAUDE.md", ".claude/rules/**", ".claude/overrides/**"]
 imports = []
-surfaces_tree = "sha256:43678c954e275fe84ece50fa05fc1cce97a5b45c27501862461c40040749faca"
+surfaces_tree = "sha256:07d7b2f75074654850d71bb5d41f3c9eb8485b294d650c2a3e2263cbc37c2cbc"
 
 [hooks]
 entries = [
@@ -42,7 +42,7 @@ tree = "sha256:2e93bc0e242ac7246fc5d0a2d25b7307a1a0de6a15c5e200706d33aba1a7ca98"
 rules = true
 
 [lock]
-canonical_sha256 = "26adb70310f8f4d57e8d769d090d48106cf77f7a96f05f4f32629fe4301c0ae1"
+canonical_sha256 = "1723be3f3821d0a65681fd8b4b0199ed6febe79b250ef968c6c8aa99bed388b5"
 
 [[overlay]]
 id = "bernard"
